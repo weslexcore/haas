@@ -22,7 +22,7 @@ export class SampleSource implements PhotoSource {
         size: 4_000_000 + i * 1000,
         lastModified: start + i * 97_000,
         mimeType: "image/jpeg",
-        sample: { hue: (i * 47) % 360, capturedAt: t },
+        sample: { hue: (i * 47) % 360, capturedAt: t, width: 1500, height: 1000 },
       };
     });
   }
@@ -52,6 +52,10 @@ export class SampleSource implements PhotoSource {
   }
 
   async emptyTrash(): Promise<number> {
+    throw new Error(READ_ONLY);
+  }
+
+  async writeExport(): Promise<string> {
     throw new Error(READ_ONLY);
   }
 }

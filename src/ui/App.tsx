@@ -65,14 +65,24 @@ function useResultToasts() {
   useEffect(
     () =>
       dispatcher.onDispatch(({ id, result }) => {
-        if (!result.ok || !["library.rejected.remove", "library.removed.restore", "library.removed.empty"].includes(id)) return;
-        const v = (result.value ?? {}) as { removed?: number; restored?: number; deleted?: number; failed?: Array<{ path: string; error: string }> };
+        if (!result.ok || !["library.rejected.remove", "library.removed.restore", "library.removed.empty", "develop.export"].includes(id)) return;
+        const v = (result.value ?? {}) as {
+          removed?: number;
+          restored?: number;
+          deleted?: number;
+          exported?: number;
+          destination?: string;
+          failed?: Array<{ path: string; error: string }>;
+        };
         const n = (k: number) => (k === 1 ? "1 photo" : `${k} photos`);
         if (id === "library.rejected.remove" && v.removed) toast(`Moved ${n(v.removed)} to the _Rejected folder. Undo brings them back.`);
         if (id === "library.removed.restore" && v.restored) toast(`Restored ${n(v.restored)}.`);
         if (id === "library.removed.empty") toast(`Permanently deleted ${n(v.deleted ?? 0)}.`);
+        if (id === "develop.export" && v.exported) {
+          toast(v.destination === "folder" ? `Exported ${n(v.exported)} to the _Exports folder.` : `Exported ${n(v.exported)} as downloads.`);
+        }
         if (v.failed?.length) {
-          toast(`${v.failed.length} file(s) couldn't be moved: ${v.failed.slice(0, 3).map((f) => `${f.path} (${f.error})`).join("; ")}`, "error", 10000);
+          toast(`${v.failed.length} file(s) failed: ${v.failed.slice(0, 3).map((f) => `${f.path} (${f.error})`).join("; ")}`, "error", 10000);
         }
       }),
     [dispatcher],

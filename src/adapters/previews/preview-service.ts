@@ -3,6 +3,7 @@ import type { LibraryProvider, PhotoIndexData, PreviewService } from "../../core
 import type { PhotoRecord } from "../../core/state/types";
 import type { PhotoDB } from "../db";
 import { WorkerPool } from "./worker-pool";
+import { sampleImage } from "../sample-image";
 
 const THUMB_SIZE = 480;
 const MAX_THUMB_URLS = 1200;
@@ -125,6 +126,18 @@ export class BrowserPreviewService implements PreviewService {
     return this.pool.run({ type: "index", file, mimeType: photo.mimeType ?? file.type }, { lane: "background" });
   }
 
+  async decode(photo: PhotoRecord, opts: { maxEdge?: number } = {}): Promise<ImageBitmap | null> {
+    if (photo.placeholderHue !== undefined) {
+      const full = await sampleImage(photo.placeholderHue, photo.width ?? 1500, photo.height ?? 1000);
+      return scaleBitmap(full, opts.maxEdge);
+    }
+    const source = this.library.current();
+    if (!source) return null;
+    // Oriented according to EXIF ("from-image" is the default).
+    const full = await createImageBitmap(await source.getFile(photo.id));
+    return scaleBitmap(full, opts.maxEdge);
+  }
+
   reset(): void {
     this.pool.clear();
     for (const entry of this.inflight.values()) entry.controller.abort();
@@ -145,5 +158,20 @@ export class NullPreviewService implements PreviewService {
   async readIndexData(_photo: PhotoRecord): Promise<PhotoIndexData | null> {
     return null;
   }
+  async decode(_photo: PhotoRecord, _opts?: { maxEdge?: number }): Promise<ImageBitmap | null> {
+    return null;
+  }
   reset(): void {}
+}
+
+async function scaleBitmap(bitmap: ImageBitmap, maxEdge?: number): Promise<ImageBitmap> {
+  if (!maxEdge || Math.max(bitmap.width, bitmap.height) <= maxEdge) return bitmap;
+  const s = maxEdge / Math.max(bitmap.width, bitmap.height);
+  const scaled = await createImageBitmap(bitmap, {
+    resizeWidth: Math.max(1, Math.round(bitmap.width * s)),
+    resizeHeight: Math.max(1, Math.round(bitmap.height * s)),
+    resizeQuality: "high",
+  });
+  bitmap.close();
+  return scaled;
 }

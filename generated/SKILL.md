@@ -40,11 +40,25 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 **Views.** `grid` shows thumbnails for fast scanning, `loupe` shows the active photo large for close review, and `develop` shows the active photo with editing controls.
 
-**Edit recipes.** Non-destructive develop settings stored per photo as JSON (exposure, contrast, white balance, …) and rendered on the GPU. (Arrive in Phase 3.)
+**Edit recipes.** Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a tone curve, HSL per colour band, and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited.
 
 **Undo and transactions.** Undoable commands are recorded in history. A transaction groups several commands into one undo step; AI-proposed plans are always applied as a single transaction after the user reviews them.
 
 ## Workflows
+
+### Give the selected photos a warm film look
+
+Warm, slightly faded, less saturated, as one undoable step.
+
+1. `develop.settings.apply` `{"settings":{"temperature":20,"contrast":-10,"saturation":-20,"toneCurve":[[0,0.06],[0.5,0.52],[1,0.94]]}}`: Applies to every selected photo.
+
+### Edit one photo, then match the rest
+
+Develop the active photo and copy its look to the other selected photos.
+
+1. `develop.adjust` `{"setting":"exposure","value":0.5}`: Adjust the active photo (select just it first).
+2. `library.selection.all`: Select the photos to match.
+3. `develop.settings.sync`: Copies everything except crop from the active photo.
 
 ### Cull a shoot
 
@@ -77,6 +91,14 @@ Find 4+ star photos captured before noon on a given day.
 1. `app.context.get`: Check the folder and the capture dates in view.
 2. `library.photos.list` `{"minRating":4,"capturedAfter":"2026-09-12T00:00","capturedBefore":"2026-09-12T12:00"}`: Capture times are camera-local.
 3. `library.selection.set` `{"ids":["DSC_0003.jpg","DSC_0007.jpg"]}`: Select the matches by id.
+
+### Warm up and brighten the selection
+
+Apply a warmer white balance and a little more exposure to every selected photo.
+
+1. `library.selection.get`: Check which photos are selected.
+2. `develop.adjust` `{"setting":"temperature","delta":15}`: Shift white balance warmer, relative to each photo.
+3. `develop.adjust` `{"setting":"exposure","delta":0.3}`: Raise exposure by a third of a stop.
 
 ## Actions
 
@@ -702,6 +724,221 @@ Examples:
 
 - `{"key":"capturedAt","direction":"asc"}`: Oldest first.
 - `{"key":"rating","direction":"desc"}`: Best rated first.
+
+### Develop
+
+#### Adjust Setting: `develop.adjust`
+
+Command, undoable
+
+Set (value) or nudge (delta) one Basic-panel slider on the selected photos: temperature, tint, exposure (stops, -5 to 5), contrast, highlights, shadows, whites, blacks, vibrance or saturation (-100 to 100). Use delta to change each photo relative to its current setting.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `setting` | `"temperature"` \| `"tint"` \| `"exposure"` \| `"contrast"` \| `"highlights"` \| `"shadows"` \| `"whites"` \| `"blacks"` \| `"vibrance"` \| `"saturation"` | yes | Which slider. |
+| `value` | number | no | New value (clamped to the slider's range). |
+| `delta` | number | no | Amount to add to the current value. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"setting":"exposure","delta":0.3}`: Brighten the selection by a third of a stop.
+- `{"setting":"temperature","value":25}`: Warm up the white balance.
+- `{"setting":"contrast","value":0}`: Reset contrast.
+
+#### Crop & Straighten: `develop.crop.set`
+
+Command, undoable
+
+Set the crop rectangle (fractions of the straightened photo: x, y, width, height) and/or straighten angle (-45 to 45 degrees) on the selected photos. The crop is kept inside the rotated photo automatically. Use aspect to crop to a ratio, as large as fits.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `x` | number (0–1) | no | Left edge, 0–1. |
+| `y` | number (0–1) | no | Top edge, 0–1. |
+| `width` | number (0.01–1) | no | Width, 0–1. |
+| `height` | number (0.01–1) | no | Height, 0–1. |
+| `angle` | number (-45–45) | no | Straighten angle in degrees, clockwise. |
+| `aspect` | `"original"` \| `"1:1"` \| `"4:5"` \| `"5:4"` \| `"2:3"` \| `"3:2"` \| `"16:9"` \| `"9:16"` | no | Crop to this aspect ratio (width:height), centred and as large as fits. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"aspect":"1:1"}`: Square crop.
+- `{"angle":-2.5}`: Straighten a slightly tilted horizon.
+- `{"x":0.1,"y":0.1,"width":0.8,"height":0.8}`: Trim 10% from every edge.
+
+#### Crop Tool: `develop.cropTool.toggle`
+
+Command · Shortcuts: `r`
+
+Show or hide the crop & straighten overlay in Develop, where the crop can be dragged and resized.
+
+*Available only when the current view is Develop and a photo is active.*
+
+#### Export JPEG: `develop.export`
+
+Command · Shortcuts: `mod+shift+e`
+
+Render the selected photos with their edits at full resolution (or limited to maxEdge pixels on the long side) and save them as JPEGs: into the folder's _Exports subfolder when it is writable, otherwise as downloads. Originals are untouched; existing exports are never overwritten.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `quality` | number (0.3–1) | no | JPEG quality, 0.3–1 (default 0.9). |
+| `maxEdge` | integer (64–16384) | no | Longest side in pixels; omit for full size. |
+| `destination` | `"folder"` \| `"download"` | no | folder (_Exports) or download; defaults to folder when writable. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{}`: Export the selection at full size.
+- `{"maxEdge":2048,"quality":0.85}`: Smaller copies for sharing.
+
+#### Set HSL: `develop.hsl.set`
+
+Command, undoable
+
+Adjust one colour band's hue, saturation or luminance (-100 to 100) on the selected photos. Bands: red, orange, yellow, green, aqua, blue, purple, magenta. E.g. lower blue luminance to darken a sky.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channel` | `"hue"` \| `"saturation"` \| `"luminance"` | yes | What to change. |
+| `band` | `"red"` \| `"orange"` \| `"yellow"` \| `"green"` \| `"aqua"` \| `"blue"` \| `"purple"` \| `"magenta"` | yes | Which colour range. |
+| `value` | number (-100–100) | yes | New value, -100 to 100. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"channel":"luminance","band":"blue","value":-40}`: Darken blue skies.
+- `{"channel":"saturation","band":"orange","value":-15}`: Calm down skin tones.
+
+#### Reset Develop Settings: `develop.reset`
+
+Command, undoable · Shortcuts: `mod+shift+r`
+
+Reset the selected photos' develop settings to unedited, or only the given groups.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Only these groups (wb, basic, presence, toneCurve, hsl, crop). Omit for all. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{}`: Reset everything.
+- `{"groups":["crop"]}`: Remove the crop only.
+
+#### Apply Develop Settings: `develop.settings.apply`
+
+Command, undoable
+
+Apply several develop settings at once to the selected photos (a look or preset): any Basic sliders, tone curve, HSL bands, crop. Values replace the current ones; omitted settings are unchanged.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `settings` | object | yes | Settings to change; anything omitted is left as it is. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"settings":{"temperature":20,"contrast":-10,"saturation":-20,"toneCurve":[[0,0.06],[0.5,0.52],[1,0.94]]}}`: A warm, faded film look.
+- `{"settings":{"saturation":-100}}`: Black and white.
+
+#### Copy Settings: `develop.settings.copy`
+
+Command · Shortcuts: `mod+shift+c`
+
+Copy the active photo's develop settings (by default everything except crop) to paste onto other photos.
+
+*Available only when a photo is active.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: wb, basic, presence, toneCurve, hsl, crop. Defaults to everything except crop. |
+
+Examples:
+
+- `{}`: Copy all settings except crop.
+- `{"groups":["wb","toneCurve"]}`: Copy only white balance and the curve.
+
+#### Get Develop Settings: `develop.settings.get`
+
+Query (no side effects)
+
+Return a photo's full develop settings (the active photo by default) and whether it has been edited.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `photoId` | string | no | Defaults to the active photo. |
+
+Examples:
+
+- `{}`: Settings of the active photo.
+
+#### Paste Settings: `develop.settings.paste`
+
+Command, undoable · Shortcuts: `mod+shift+v`
+
+Paste copied develop settings onto the selected photos (only the groups that were copied).
+
+*Available only when at least one photo is selected and develop settings have been copied.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{}`: Paste onto the selection.
+
+#### Sync Settings: `develop.settings.sync`
+
+Command, undoable · Shortcuts: `mod+shift+s`
+
+Copy the active photo's develop settings to every other selected photo (by default everything except crop).
+
+*Available only when a photo is active and more than one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: wb, basic, presence, toneCurve, hsl, crop. Defaults to everything except crop. |
+
+Examples:
+
+- `{}`: Sync everything except crop.
+- `{"groups":["wb"]}`: Match white balance only.
+
+#### Set Tone Curve: `develop.toneCurve.set`
+
+Command, undoable
+
+Replace the master tone curve on the selected photos with control points [input, output] in 0–1. [[0,0],[1,1]] is neutral; lifting the first point fades blacks, an S-shape adds contrast.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `points` | any[][] | yes | Control points [input, output], 0–1. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"points":[[0,0],[0.25,0.2],[0.75,0.8],[1,1]]}`: Gentle S-curve for contrast.
+- `{"points":[[0,0.08],[1,0.95]]}`: Faded film look: lifted blacks, softer whites.
 
 ### History
 

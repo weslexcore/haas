@@ -2,7 +2,7 @@
 
 A browser-based photo culling and editing app, in the spirit of Lightroom. Everything is an action in a central registry. Buttons, keyboard shortcuts, the command palette, scripts and (soon) an AI all dispatch the same actions.
 
-**Status:** Phase 2 (library and culling). You can open a real folder (File System Access API in Chromium, read-only fallback elsewhere), or the sample library. Develop editing comes in Phase 3 and AI in Phase 4.
+**Status:** Phase 3 (develop). You can open a real folder (File System Access API in Chromium, read-only fallback elsewhere) or the sample library, cull, edit non-destructively on the GPU, and export JPEGs. AI comes in Phase 4.
 
 ```bash
 yarn install
@@ -30,6 +30,10 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | `⌘L` / `Ctrl+L` | Clear filter |
 | `⌘⌫` / `Ctrl+Backspace` | Remove rejected photos (moved to `_Rejected/`; restore or delete them from the filter bar) |
 | `\` | Before/after (Develop only) |
+| `R` | Crop & straighten tool (Develop) |
+| `⌘⇧C` / `⌘⇧V` / `⌘⇧S` | Copy / paste / sync develop settings |
+| `⌘⇧R` | Reset develop settings |
+| `⌘⇧E` | Export JPEG (to `_Exports/`, or downloads for read-only folders) |
 | `⌘Z` / `⇧⌘Z` | Undo, redo |
 | `T T` | Toggle light/dark theme (a chord) |
 | `⌘A` | Select all |

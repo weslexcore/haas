@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { editedThumbnailUrl } from "../develop/edited-thumbs";
 import { extension } from "../../core/library/formats";
 import { fileKey } from "../../core/library/util";
 import type { PhotoRecord } from "../../core/state/types";
@@ -30,10 +31,44 @@ export function useThumbnail(photo: PhotoRecord | undefined): { url: string | nu
   return state.key === key ? state : { url: null, failed: false };
 }
 
+/**
+ * The thumbnail with the photo's develop edits applied. Waits until editing
+ * pauses (a slider drag re-renders only once it settles) and keeps showing
+ * the previous image meanwhile.
+ */
+function useEditedThumbnail(photo: PhotoRecord, baseUrl: string | null): string | null {
+  const { services } = useRuntime();
+  const [url, setUrl] = useState<string | null>(null);
+  const recipeKey = photo.edit ? JSON.stringify(photo.edit) : "";
+  const needsBase = photo.placeholderHue === undefined;
+  useEffect(() => {
+    if (!photo.edit || (needsBase && !baseUrl)) return setUrl(null);
+    let live = true;
+    const recipe = photo.edit;
+    const timer = setTimeout(() => {
+      void editedThumbnailUrl(services.previews, photo, recipe, baseUrl).then((u) => live && setUrl(u));
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+    // Keyed on the recipe's content and the base image, not the record object.
+  }, [recipeKey, baseUrl, photo.id, needsBase, services]);
+  return photo.edit ? url : null;
+}
+
 /** Decorative: always used inside a control that is already labelled with the file name. */
 export function Thumb({ photo, className }: { photo: PhotoRecord; className?: string }) {
   const { url, failed } = useThumbnail(photo);
-  if (photo.placeholderHue !== undefined) return <Placeholder photo={photo} className={className} decorative />;
+  const edited = useEditedThumbnail(photo, url);
+  if (photo.placeholderHue !== undefined && !edited) return <Placeholder photo={photo} className={className} decorative />;
+  if (edited) {
+    return (
+      <div className={`${styles.thumb} ${className ?? ""}`}>
+        <img src={edited} alt="" draggable={false} decoding="async" />
+      </div>
+    );
+  }
   return (
     <div className={`${styles.thumb} ${className ?? ""}`}>
       {url ? (

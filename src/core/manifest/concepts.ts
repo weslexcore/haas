@@ -77,8 +77,10 @@ export const CONCEPTS: Concept[] = [
   {
     term: "Edit recipes",
     explanation:
-      "Non-destructive develop settings stored per photo as JSON (exposure, contrast, white balance, …) and " +
-      "rendered on the GPU. (Arrive in Phase 3.)",
+      "Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, " +
+      "contrast, highlights, shadows, whites, blacks, vibrance, saturation, a tone curve, HSL per colour band, " +
+      "and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply " +
+      "them at full resolution. A photo with default settings is unedited.",
   },
   {
     term: "Undo and transactions",
@@ -101,6 +103,28 @@ export interface Workflow {
 }
 
 export const WORKFLOWS: Workflow[] = [
+  {
+    title: "Give the selected photos a warm film look",
+    goal: "Warm, slightly faded, less saturated, as one undoable step.",
+    steps: [
+      {
+        actionId: "develop.settings.apply",
+        params: {
+          settings: { temperature: 20, contrast: -10, saturation: -20, toneCurve: [[0, 0.06], [0.5, 0.52], [1, 0.94]] },
+        },
+        note: "Applies to every selected photo.",
+      },
+    ],
+  },
+  {
+    title: "Edit one photo, then match the rest",
+    goal: "Develop the active photo and copy its look to the other selected photos.",
+    steps: [
+      { actionId: "develop.adjust", params: { setting: "exposure", value: 0.5 }, note: "Adjust the active photo (select just it first)." },
+      { actionId: "library.selection.all", note: "Select the photos to match." },
+      { actionId: "develop.settings.sync", note: "Copies everything except crop from the active photo." },
+    ],
+  },
   {
     title: "Cull a shoot",
     goal: "Go through every photo once, picking keepers and rejecting the rest.",
@@ -145,8 +169,9 @@ export const WORKFLOWS: Workflow[] = [
     title: "Warm up and brighten the selection",
     goal: "Apply a warmer white balance and a little more exposure to every selected photo.",
     steps: [
-      { actionId: "develop.whiteBalance.temperature.adjust", params: { amount: 400 }, note: "Shift white balance warmer." },
-      { actionId: "develop.exposure.adjust", params: { amount: 0.3 }, note: "Raise exposure by a third of a stop." },
+      { actionId: "library.selection.get", note: "Check which photos are selected." },
+      { actionId: "develop.adjust", params: { setting: "temperature", delta: 15 }, note: "Shift white balance warmer, relative to each photo." },
+      { actionId: "develop.adjust", params: { setting: "exposure", delta: 0.3 }, note: "Raise exposure by a third of a stop." },
     ],
   },
 ];

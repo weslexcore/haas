@@ -1,4 +1,4 @@
-import { TRASH_DIR, imageMimeType, sidecarCandidates, trashPath } from "../core/library/formats";
+import { EXPORTS_DIR, TRASH_DIR, imageMimeType, sidecarCandidates, trashPath, uniqueName } from "../core/library/formats";
 import type { FileOpResult, PhotoSource, SourceFile } from "../core/services";
 import type { FolderInfo } from "../core/state/types";
 
@@ -22,7 +22,7 @@ export class MemorySource implements PhotoSource {
   }
 
   async listFiles(): Promise<SourceFile[]> {
-    return this.list((path) => !path.startsWith(`${TRASH_DIR}/`));
+    return this.list((path) => !path.startsWith(`${TRASH_DIR}/`) && !path.startsWith(`${EXPORTS_DIR}/`));
   }
 
   private list(include: (path: string) => boolean, rename: (path: string) => string = (p) => p): SourceFile[] {
@@ -112,5 +112,12 @@ export class MemorySource implements PhotoSource {
     const count = (await this.listTrash()).length;
     for (const path of [...this.files.keys()]) if (path.startsWith(`${TRASH_DIR}/`)) this.files.delete(path);
     return count;
+  }
+
+  async writeExport(fileName: string, data: Blob): Promise<string> {
+    if (!this.folder.writable) throw new Error("Read-only folder.");
+    const name = uniqueName(fileName, (n) => this.files.has(`${EXPORTS_DIR}/${n}`));
+    this.files.set(`${EXPORTS_DIR}/${name}`, { data, lastModified: Date.now() });
+    return `${EXPORTS_DIR}/${name}`;
   }
 }

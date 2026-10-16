@@ -50,6 +50,10 @@ export class TestLibraryProvider implements LibraryProvider {
 
 /** Index data from a lookup table instead of decoding files. */
 export class FakePreviews extends NullPreviewService implements PreviewService {
+  /** Pretend every photo decodes (tests can't create real ImageBitmaps in Node). */
+  override async decode() {
+    return { width: 100, height: 50, close() {} } as unknown as ImageBitmap;
+  }
   constructor(private readonly data: Record<string, PhotoIndexData> = {}) {
     super();
   }
@@ -60,6 +64,7 @@ export class FakePreviews extends NullPreviewService implements PreviewService {
 
 export interface TestRuntime extends Runtime {
   downloads: Array<{ fileName: string; content: string }>;
+  exports: Array<{ recipe: unknown; opts: unknown }>;
   library: TestLibraryProvider;
   metadata: MemoryMetadataStore;
 }
@@ -75,6 +80,7 @@ export async function createTestRuntime(
   } = {},
 ): Promise<TestRuntime> {
   const downloads: TestRuntime["downloads"] = [];
+  const exports: TestRuntime["exports"] = [];
   const library = new TestLibraryProvider(opts.photos ?? 10);
   const metadata = new MemoryMetadataStore();
   const runtime = createRuntime({
@@ -87,13 +93,22 @@ export async function createTestRuntime(
       metadata,
       previews: opts.previews ?? new FakePreviews(),
       persistence: { flush: async () => undefined },
+      exporter: {
+        renderJpeg: async (_image, recipe, opts) => {
+          exports.push({ recipe, opts });
+          return { blob: new Blob(["jpeg"], { type: "image/jpeg" }), width: 100, height: 50 };
+        },
+      },
       ai: new StubAIProvider(),
-      downloads: { save: (fileName, content) => downloads.push({ fileName, content }) },
+      downloads: {
+        save: (fileName, content) => downloads.push({ fileName, content }),
+        saveBlob: (fileName) => downloads.push({ fileName, content: "<blob>" }),
+      },
     },
   });
   await runtime.keybindings.load();
   if (opts.loadSample !== false && runtime.registry.get("library.sample.load")) await runtime.dispatch("library.sample.load");
-  return Object.assign(runtime, { downloads, library, metadata });
+  return Object.assign(runtime, { downloads, exports, library, metadata });
 }
 
 export function key(

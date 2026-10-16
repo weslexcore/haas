@@ -4,6 +4,7 @@ import { BrowserDownloads } from "../adapters/browser-downloads";
 import { DexieMetadataStore, PhotoDB } from "../adapters/db";
 import { BrowserLibraryProvider } from "../adapters/library-provider";
 import { BrowserPreviewService } from "../adapters/previews/preview-service";
+import { WorkerExportService } from "../adapters/render/export-service";
 import { LocalSettingsStore } from "../adapters/settings";
 import { StubAIProvider } from "../adapters/stub-ai-provider";
 import { detectMac } from "../core/keybindings/combo";
@@ -40,6 +41,7 @@ export async function createBrowserRuntime(): Promise<Runtime> {
     metadata: new DexieMetadataStore(db),
     previews: new BrowserPreviewService(library, db),
     persistence: { flush: () => sync?.flush() ?? Promise.resolve() },
+    exporter: new WorkerExportService(),
     ai: new StubAIProvider(),
     downloads: new BrowserDownloads(),
   };

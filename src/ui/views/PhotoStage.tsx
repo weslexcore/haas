@@ -4,6 +4,7 @@ import type { PhotoRecord } from "../../core/state/types";
 import { useAppState, useDispatch } from "../hooks";
 import { useRuntime } from "../runtime-context";
 import { FlagMark, LabelDot, Placeholder, Stars, formatCaptured, formatExposure } from "./PhotoMeta";
+import { DevelopCanvas } from "../develop/DevelopCanvas";
 import styles from "./PhotoStage.module.css";
 
 /** Full-size image URL for a photo, with the neighbours preloaded for instant next/previous. */
@@ -66,6 +67,24 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
 
   if (!photo) return <div className={styles.stage} />;
 
+  // Edited photos render through the develop pipeline so Loupe shows the edits.
+  if (photo.edit) {
+    return (
+      <div className={styles.editedStage} data-zoom={zoom}>
+        <DevelopCanvas
+          key={photo.id}
+          photo={photo}
+          scale={zoom === "actual" ? "actual" : "fit"}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            void dispatch("app.contextMenu.open", { menuId: "loupe.photo", x: e.clientX, y: e.clientY });
+          }}
+        />
+        {info && <InfoOverlay photo={photo} />}
+      </div>
+    );
+  }
+
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     void dispatch("app.contextMenu.open", { menuId: "loupe.photo", x: e.clientX, y: e.clientY });
@@ -102,7 +121,7 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
   );
 }
 
-function InfoOverlay({ photo }: { photo: PhotoRecord }) {
+export function InfoOverlay({ photo }: { photo: PhotoRecord }) {
   const camera = [photo.exif?.make, photo.exif?.model].filter(Boolean).join(" ");
   return (
     <div className={styles.info} aria-label="Photo information">
