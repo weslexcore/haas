@@ -93,6 +93,9 @@ export async function createTestRuntime(
       metadata,
       previews: opts.previews ?? new FakePreviews(),
       persistence: { flush: async () => undefined },
+      vision: {
+        capture: async (photo, opts) => ({ photoId: photo.id, mediaType: "image/jpeg" as const, data: "AAAA", width: opts.maxEdge, height: Math.round(opts.maxEdge * 2 / 3), edited: opts.edited && !!photo.edit }),
+      },
       exporter: {
         renderJpeg: async (_image, recipe, opts) => {
           exports.push({ recipe, opts });

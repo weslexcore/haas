@@ -85,7 +85,28 @@ EditRecipe (per photo, in the store) ──► uniformsFor() ──► DevelopRe
 - **Export** (`develop.export`). The image is decoded at full resolution (oriented), rendered in a worker, and encoded as JPEG. It is written to `_Exports/` without overwriting anything (`name-2.jpg`, …), or downloaded for read-only folders. EXIF isn't copied into exports yet.
 - **Edits in Loupe and thumbnails.** Edited photos render through the pipeline in Loupe. The grid and filmstrip re-render the cached thumbnail with the recipe once editing pauses.
 
-**Services** (`core/services`). `SettingsStore`, `LibraryProvider`/`PhotoSource`, `MetadataStore`, `PreviewService`, `ExportService`, `AIProvider` and `DownloadService` are interfaces, with browser implementations in `src/adapters` (and in-memory ones for tests). A server backend can replace any of them without touching actions.
+## AI
+
+```
+palette "?" ─► app.ai.ask ─► AIProvider (Anthropic, from the browser with the user's key)
+                 │   manifest (cached system prefix) + context + read-only query tools
+                 │   └─ the model may call queries: library.photos.list, develop.settings.get,
+                 │      library.photos.view (images, with edits) … then returns a structured plan
+                 ▼
+          reviewPlan(): each step checked against the registry and its Zod schema
+                 ▼
+   AI panel: toggle/edit steps ─► PlanRunner.preview() ─► live state (no history, nothing persisted)
+                 ▼ Apply
+   PlanRunner.apply(): one dispatcher transaction "AI: …" (source "ai") ─► one ⌘Z undoes it
+```
+
+- **Provider** (`adapters/ai/anthropic-provider.ts`). Uses `@anthropic-ai/sdk` with `dangerouslyAllowBrowser`. The key and model live in local storage via `app.ai.configure`, which is internal so the key never passes through a plan; errors are redacted. Defaults: `claude-opus-5-5` (Sonnet 5.5 and Haiku 5.5 can be chosen in AI Settings), `effort: "medium"`, server-side refusal fallback (`fallbacks: "default"`), and structured output (`betaZodOutputFormat`) for the plan. Step params arrive as JSON strings and are validated per action. The instructions and the manifest form a cached prefix, and the per-request context goes in the user turn.
+- **Tools.** Every public query action is offered as a tool (dots become underscores in names). Only read-only queries can run while planning; tool results over 60k characters are truncated with an explicit note.
+- **Vision.** `library.photos.view` returns `{ kind: "images" }`, which the provider sends as image content blocks. `BrowserVisionService` decodes the photo, applies the edit on the GPU unless asked for the original, and encodes a JPEG at a 512, 1024 or 1568px long edge, with per-size limits per call.
+- **Review** (`core/ai/plan.ts`). Unknown, internal, query and AI/history/shortcut actions are rejected; params are validated; each step gets a label and an impact ("on 12 photos", from `targets` or the selection). Steps with `sideEffects` (file moves, export, folder loading) never preview; they run on Apply.
+- **Preview** (`core/ai/plan-runner.ts`). Snapshots the state, runs the previewable steps with history recording suspended, and sets `ai.previewing`. `MetadataSync` ignores previews, and a dispatch guard refuses other edits until the preview ends. Ending restores the snapshot exactly.
+
+**Services** (`core/services`). `SettingsStore`, `LibraryProvider`/`PhotoSource`, `MetadataStore`, `PreviewService`, `ExportService`, `VisionService`, `AIProvider` and `DownloadService` are interfaces, with browser implementations in `src/adapters` (and in-memory ones for tests). A server backend can replace any of them without touching actions.
 
 **Runtime** (`core/runtime.ts`). `createRuntime()` wires everything together. The browser calls it from `ui/bootstrap.ts`, and tests call it from `tests/unit/helpers.ts`. In the browser, `window.photo.dispatch(...)` exposes the same dispatcher for scripting and end-to-end tests.
 

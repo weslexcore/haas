@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { defineAction } from "../core/actions/types";
-import { contextMenuOpen, hasPhotos, paletteOpen, shortcutsOpen } from "../core/actions/when";
-import { buildManifest, serializeManifest } from "../core/manifest/build-manifest";
+import { contextMenuOpen, hasPhotos, paletteOpen, shortcutsOpen, when } from "../core/actions/when";
+import { buildManifest, paramsJsonSchema, serializeManifest } from "../core/manifest/build-manifest";
+import { reviewPlan } from "../core/ai/plan";
 import { renderSkillMd } from "../core/manifest/render-skill-md";
-import type { Plan } from "../core/services";
 import { contextSummary } from "./context";
 
 export const openPalette = defineAction({
@@ -263,17 +263,88 @@ export const askAI = defineAction({
   id: "app.ai.ask",
   title: "Ask AI",
   description:
-    "Send a natural-language request to the AI provider together with the action manifest and current context. " +
-    "Returns a proposed plan (ordered actions with reasons) for the user to review; it does not apply anything.",
+    "Send a natural-language request to the AI provider with the action manifest and current context. The model " +
+    "may run read-only queries, then returns a plan (ordered actions with reasons) that is checked against each " +
+    "action's schema. Nothing is applied: the user reviews, previews and applies the plan.",
   category: "App",
   kind: "command",
+  internal: true,
   params: z.object({ prompt: z.string().min(1).describe("What the user wants, in their own words.") }),
   examples: [{ params: { prompt: "Show me only 4+ star photos" }, description: "Ask for a plan to filter the library." }],
-  async run({ prompt }, ctx): Promise<Plan> {
-    if (!ctx.services.ai.isConfigured()) {
-      throw new Error(`AI is not set up yet (provider: ${ctx.services.ai.name}). It arrives in Phase 4.`);
-    }
-    return ctx.services.ai.propose({ prompt, manifest: buildManifest(ctx.registry, ctx.menus), context: contextSummary(ctx) });
+  async run({ prompt }, ctx) {
+    const ai = ctx.services.ai;
+    if (!ai.isConfigured()) throw new Error("Add an Anthropic API key in AI Settings first.");
+    const queries = ctx.registry.all().filter((a) => a.kind === "query" && !a.internal);
+    const plan = await ai.propose({
+      prompt,
+      manifest: buildManifest(ctx.registry, ctx.menus),
+      context: contextSummary(ctx),
+      tools: queries.map((a) => ({
+        actionId: a.id,
+        description: a.description,
+        inputSchema: paramsJsonSchema(a) ?? { type: "object", properties: {} },
+      })),
+      callTool: async (actionId, input) => {
+        const action = ctx.registry.get(actionId);
+        if (!action || action.kind !== "query" || action.internal) throw new Error("Only read-only queries can be used while planning.");
+        const empty = !input || (typeof input === "object" && Object.keys(input).length === 0);
+        const r = await ctx.dispatch(actionId, empty ? undefined : input);
+        if (!r.ok) throw new Error(r.message);
+        return r.value;
+      },
+    });
+    return { summary: plan.summary, model: ai.model, steps: reviewPlan(ctx.registry, ctx, plan.steps) };
+  },
+});
+
+const aiModel = z.enum(["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
+
+export const openAiSettings = defineAction({
+  id: "app.ai.settings.open",
+  title: "AI Settings…",
+  description: "Open AI settings: the Anthropic API key (stored only in this browser) and which Claude model plans requests.",
+  category: "App",
+  kind: "command",
+  run(_, ctx) {
+    ctx.update((s) => {
+      s.ai.settingsOpen = true;
+      s.palette = { open: false, actionId: null };
+    });
+  },
+});
+
+export const closeAiSettings = defineAction({
+  id: "app.ai.settings.close",
+  title: "Close AI Settings",
+  description: "Close the AI settings screen.",
+  category: "App",
+  kind: "command",
+  when: when("AI settings are open", (ctx) => ctx.state.ai.settingsOpen),
+  run(_, ctx) {
+    ctx.update((s) => {
+      s.ai.settingsOpen = false;
+    });
+  },
+});
+
+export const configureAi = defineAction({
+  id: "app.ai.configure",
+  title: "Configure AI",
+  description: "Store or remove the Anthropic API key and choose the model. Internal: the key never goes through AI plans.",
+  category: "App",
+  kind: "command",
+  internal: true,
+  params: z.object({
+    apiKey: z.string().nullable().optional().describe("New API key, or null to remove it."),
+    model: aiModel.optional().describe("Model used for planning."),
+  }),
+  examples: [{ params: { model: "claude-opus-5-5" }, description: "Use Claude Opus 5.5." }],
+  async run(p, ctx) {
+    await ctx.services.ai.configure({
+      ...(p.apiKey !== undefined ? { apiKey: p.apiKey } : {}),
+      ...(p.model ? { model: p.model } : {}),
+    });
+    return { configured: ctx.services.ai.isConfigured(), model: ctx.services.ai.model };
   },
 });
 
@@ -291,4 +362,7 @@ export const appActions = [
   listActions,
   exportManifest,
   askAI,
+  openAiSettings,
+  closeAiSettings,
+  configureAi,
 ];

@@ -2,6 +2,7 @@ import { Dispatcher, type DispatchOptions } from "./actions/dispatcher";
 import { ActionRegistry } from "./actions/registry";
 import type { AnyAction, DispatchResult, Platform } from "./actions/types";
 import { MenuRegistry, type MenuDefinition } from "./menus/registry";
+import { PlanRunner } from "./ai/plan-runner";
 import { History } from "./history/history";
 import { KeybindingService } from "./keybindings/service";
 import type { Services } from "./services";
@@ -26,6 +27,8 @@ export interface Runtime {
   input: { capsLock: boolean };
   dispatcher: Dispatcher;
   keybindings: KeybindingService;
+  /** Previews and applies AI plans. */
+  plans: PlanRunner;
   services: Services;
   platform: Platform;
   dispatch<R = unknown>(id: string, params?: unknown, opts?: DispatchOptions): Promise<DispatchResult<R>>;
@@ -60,9 +63,11 @@ export function createRuntime(opts: RuntimeOptions): Runtime {
       void dispatcher.dispatch(PARAM_PROMPT_ACTION_ID, { actionId }, { source: "keyboard" });
     },
   });
+  const plans = new PlanRunner(store, history, dispatcher, registry);
   return {
     store,
     history,
+    plans,
     registry,
     menus,
     input,

@@ -52,8 +52,12 @@ export interface DispatcherDeps {
   input: InputState;
 }
 
+/** Returns a reason to refuse a dispatch, or null to allow it. */
+export type DispatchGuard = (action: AnyAction, source: DispatchSource) => string | null;
+
 export class Dispatcher {
   private frame: Frame | null = null;
+  private guards = new Set<DispatchGuard>();
   private listeners = new Set<(e: DispatchEvent) => void>();
 
   constructor(private readonly deps: DispatcherDeps) {}
@@ -111,6 +115,12 @@ export class Dispatcher {
     }
   }
 
+  /** Refuse some dispatches temporarily (e.g. edits while an AI plan is previewed). */
+  addGuard(guard: DispatchGuard): () => void {
+    this.guards.add(guard);
+    return () => this.guards.delete(guard);
+  }
+
   onDispatch(listener: (e: DispatchEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -129,6 +139,11 @@ export class Dispatcher {
         error: "unavailable",
         message: `"${action.title}" is only available when ${action.when?.describe}.`,
       };
+    }
+
+    for (const guard of this.guards) {
+      const reason = guard(action, source);
+      if (reason) return { ok: false, error: "unavailable", message: reason };
     }
 
     let parsed: unknown = undefined;

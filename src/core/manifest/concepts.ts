@@ -62,6 +62,13 @@ export const CONCEPTS: Concept[] = [
       "darktable can read them. The contents of photos are never modified.",
   },
   {
+    term: "Seeing photos",
+    explanation:
+      "Metadata (rating, flags, EXIF, capture time) comes from query actions. To judge what is in a photo " +
+      "(sharpness, faces, subject, colour, how an edit looks), view it with library.photos.view, which returns " +
+      "images with the current edits applied. Viewing costs tokens: scan with thumbnails, check focus with detail.",
+  },
+  {
     term: "Removing photos",
     explanation:
       "Rejected photos can be removed from the library: they move, with their sidecars, into a _Rejected " +
@@ -103,6 +110,16 @@ export interface Workflow {
 }
 
 export const WORKFLOWS: Workflow[] = [
+  {
+    title: "Reject the blurry frames in a burst",
+    goal: "Keep the sharpest of several near-identical photos.",
+    steps: [
+      { actionId: "library.photos.list", params: { capturedAfter: "2026-09-12T06:30", capturedBefore: "2026-09-12T06:35" }, note: "Find the burst by capture time." },
+      { actionId: "library.photos.view", params: { photoIds: ["DSC_0001.jpg", "DSC_0002.jpg", "DSC_0003.jpg"], size: "thumbnail" }, note: "Compare them; use detail size on the best candidates to check focus." },
+      { actionId: "library.flag.set", params: { flag: "reject", photoIds: ["DSC_0001.jpg", "DSC_0003.jpg"] }, note: "Reject the softer frames." },
+      { actionId: "library.flag.set", params: { flag: "pick", photoIds: ["DSC_0002.jpg"] }, note: "Pick the sharpest." },
+    ],
+  },
   {
     title: "Give the selected photos a warm film look",
     goal: "Warm, slightly faded, less saturated, as one undoable step.",

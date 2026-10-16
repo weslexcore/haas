@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { requiresParams } from "../../core/actions/dispatcher";
-import type { Plan } from "../../core/services";
+import { askAi } from "../ai/ai-store";
 import { useAppState, useBindingsVersion } from "../hooks";
 import { useRuntime } from "../runtime-context";
 import { Kbd } from "../shell/Kbd";
@@ -13,10 +13,7 @@ import { getRecents, pushRecent } from "./recents";
 import { AI_PREFIX, buildRows, searchRows, type ActionRow, type PaletteRow } from "./rows";
 import styles from "./CommandPalette.module.css";
 
-type Step =
-  | { kind: "search" }
-  | { kind: "params"; row: ActionRow }
-  | { kind: "ai"; prompt: string; status: "loading" | "error" | "done"; message?: string; plan?: Plan };
+type Step = { kind: "search" } | { kind: "params"; row: ActionRow };
 
 export function CommandPalette() {
   const palette = useAppState((s) => s.palette);
@@ -60,13 +57,9 @@ function PaletteDialog({ initialActionId }: { initialActionId: string | null }) 
 
   async function askAI(prompt: string) {
     if (!prompt) return;
-    setStep({ kind: "ai", prompt, status: "loading" });
-    const result = await runtime.dispatch<Plan>("app.ai.ask", { prompt }, { source: "palette" });
-    setStep(
-      result.ok
-        ? { kind: "ai", prompt, status: "done", plan: result.value }
-        : { kind: "ai", prompt, status: "error", message: result.message },
-    );
+    // The plan is reviewed in the AI panel, which stays open beside the photos for previewing.
+    await runtime.dispatch("app.palette.close", undefined, { source: "palette" });
+    void askAi(runtime, prompt);
   }
 
   function choose(row: PaletteRow | undefined) {
@@ -184,35 +177,6 @@ function PaletteDialog({ initialActionId }: { initialActionId: string | null }) 
         />
       )}
 
-      {step.kind === "ai" && (
-        <div className={styles.aiPanel} role="region" aria-label="AI request">
-          <div className={styles.paramTitle}>✦ “{step.prompt}”</div>
-          {step.status === "loading" && <p aria-live="polite">Thinking…</p>}
-          {step.status === "error" && (
-            <p className={styles.error} role="alert">
-              {step.message}
-            </p>
-          )}
-          {step.status === "done" && step.plan && (
-            <>
-              <p>{step.plan.summary}</p>
-              <ol>
-                {step.plan.steps.map((s, i) => (
-                  <li key={i}>
-                    <code>{s.actionId}</code> {JSON.stringify(s.params)}: {s.reason}
-                  </li>
-                ))}
-              </ol>
-              <p className={styles.hint}>Review and apply arrive in Phase 4.</p>
-            </>
-          )}
-          <div className={styles.paramFooter}>
-            <span className={styles.hint}>
-              <kbd>Esc</kbd> back
-            </span>
-          </div>
-        </div>
-      )}
     </Modal>
   );
 }

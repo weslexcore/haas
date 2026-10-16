@@ -209,11 +209,12 @@ describe("actions", () => {
     expect(rt.store.getState().palette).toEqual({ open: true, actionId: "library.rating.set" });
   });
 
-  it("ask AI fails clearly while no provider is configured", async () => {
+  it("ask AI fails clearly while no API key is configured", async () => {
     const rt = await createTestRuntime();
+    await rt.services.ai.configure({ apiKey: null });
     const r = await rt.dispatch("app.ai.ask", { prompt: "reject blurry photos" });
     expect(r).toMatchObject({ ok: false, error: "failed" });
-    if (!r.ok) expect(r.message).toMatch(/Phase 4/);
+    if (!r.ok) expect(r.message).toMatch(/API key/);
   });
 
   it("exports the manifest through the download service", async () => {

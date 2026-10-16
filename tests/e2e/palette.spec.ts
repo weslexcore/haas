@@ -57,14 +57,15 @@ test("recently used actions come first", async ({ page }) => {
   await expect(first).toContainText("recent");
 });
 
-test("? switches to AI mode (stubbed until Phase 4)", async ({ page }) => {
+test("? switches to AI mode", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+k");
   await page.keyboard.type("?show me only 4+ star photos");
   const options = palette(page).getByRole("option");
   await expect(options).toHaveCount(1);
   await expect(options.first()).toContainText("Ask AI");
   await page.keyboard.press("Enter");
-  await expect(palette(page).getByRole("alert")).toContainText("Phase 4");
+  await expect(palette(page)).toBeHidden();
+  await expect(page.getByRole("complementary", { name: "AI plan" })).toContainText("show me only 4+ star photos");
 });
 
 test("a binding without params opens the palette on the param step", async ({ page }) => {

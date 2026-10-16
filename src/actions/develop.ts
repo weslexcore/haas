@@ -271,6 +271,7 @@ export const syncSettings = defineAction({
     { params: { groups: ["wb"] }, description: "Match white balance only." },
   ],
   defaultShortcuts: [{ keys: "mod+shift+s" }],
+  targets: (_, ctx) => ctx.state.selection.ids.filter((id) => id !== ctx.state.selection.activeId),
   run(p, ctx) {
     const { activeId, ids } = ctx.state.selection;
     const from = editOf(ctx.state.photos.byId[activeId!]);
@@ -343,6 +344,7 @@ export const toggleCropTool = defineAction({
 
 export const exportJpeg = defineAction({
   id: "develop.export",
+  sideEffects: true,
   title: "Export JPEG",
   description:
     "Render the selected photos with their edits at full resolution (or limited to maxEdge pixels on the long " +

@@ -2,7 +2,7 @@
 
 A browser-based photo culling and editing app, in the spirit of Lightroom. Everything is an action in a central registry. Buttons, keyboard shortcuts, the command palette, scripts and (soon) an AI all dispatch the same actions.
 
-**Status:** Phase 3 (develop). You can open a real folder (File System Access API in Chromium, read-only fallback elsewhere) or the sample library, cull, edit non-destructively on the GPU, and export JPEGs. AI comes in Phase 4.
+**Status:** Phase 4 (AI). You can open a real folder (File System Access API in Chromium, read-only fallback elsewhere) or the sample library, cull, edit non-destructively on the GPU, export JPEGs, and ask Claude in plain language. Claude can look at your photos; every plan is reviewed and previewed before it's applied as one undoable step.
 
 ```bash
 yarn install
@@ -16,7 +16,7 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 
 | Keys | Action |
 | --- | --- |
-| `⌘K` / `Ctrl+K` | Command palette (type `?` to ask AI, stubbed for now) |
+| `⌘K` / `Ctrl+K` | Command palette (type `?` to ask Claude; set your API key in "AI Settings…") |
 | `⌘/` / `Ctrl+/` | Keyboard Shortcuts: search, rebind, resolve conflicts, import/export |
 | `G` `E` `D` | Grid, Loupe and Develop views |
 | `←` `→` `Home` `End` | Previous, next, first and last photo |
