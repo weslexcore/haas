@@ -110,6 +110,10 @@ palette "?" ─► app.ai.ask ─► AIProvider (Anthropic, from the browser wit
 
 **Runtime** (`core/runtime.ts`). `createRuntime()` wires everything together. The browser calls it from `ui/bootstrap.ts`, and tests call it from `tests/unit/helpers.ts`. In the browser, `window.photo.dispatch(...)` exposes the same dispatcher for scripting and end-to-end tests.
 
+## URL state
+
+`ui/url-state.ts` keeps `?folder=…&view=…&photo=…` in sync with the store. View changes push a history entry (Back returns to the previous view); photo changes replace it. On load and on back/forward, the target is applied through `library.selection.set` and `view.set` once the matching folder has loaded. A link for a different folder is dropped, and the URL is rewritten to match what is shown. A folder that needs permission keeps the target until it is reconnected.
+
 ## Theming
 
 `ui/styles/tokens.css` defines semantic tokens (`--surface-panel`, `--accent`, `--text-muted`, …) with one block per theme, selected by `data-theme` on `<html>`. Components use CSS Modules and only reference tokens. A new theme is a new block, and runtime themes can set the variables directly.
