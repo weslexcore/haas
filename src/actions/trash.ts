@@ -6,6 +6,7 @@ import { emptyTrash, removePhotos, restorePhotos } from "../core/library/trash";
 
 export const removeRejected = defineAction({
   id: "library.rejected.remove",
+  sideEffects: true,
   title: "Remove Rejected Photos",
   description:
     `Move rejected photos (and their XMP sidecars) out of the library into the folder's ${TRASH_DIR} ` +
@@ -25,6 +26,8 @@ export const removeRejected = defineAction({
     { params: { photoIds: ["DSC_0007.jpg"] }, description: "Move one rejected photo." },
   ],
   defaultShortcuts: [{ keys: "mod+backspace" }],
+  targets: (params, ctx) =>
+    params?.photoIds ?? ctx.state.photos.order.filter((id) => ctx.state.photos.byId[id]?.flag === "reject"),
   async run(params, ctx) {
     const { byId, order } = ctx.state.photos;
     const ids = params?.photoIds ?? order.filter((id) => byId[id]?.flag === "reject");
@@ -36,6 +39,7 @@ export const removeRejected = defineAction({
 
 export const restoreRemoved = defineAction({
   id: "library.removed.restore",
+  sideEffects: true,
   title: "Restore Removed Photos",
   description: `Move photos back from the ${TRASH_DIR} subfolder to where they were, with their ratings and sidecars. Defaults to all of them. Undoable.`,
   category: "Library",
@@ -56,6 +60,7 @@ export const restoreRemoved = defineAction({
 
 export const emptyRemoved = defineAction({
   id: "library.removed.empty",
+  sideEffects: true,
   title: "Delete Removed Photos Permanently",
   description:
     `Permanently delete everything in the ${TRASH_DIR} subfolder. This cannot be undone and the files do not ` +

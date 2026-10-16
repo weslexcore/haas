@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useAppState } from "./hooks";
 import { trackModifiers } from "./input-store";
 import { ContextMenu } from "./menus/ContextMenu";
+import { AiPanel } from "./ai/AiPanel";
+import { AiSettings } from "./ai/AiSettings";
 import { CommandPalette } from "./palette/CommandPalette";
 import { useRuntime } from "./runtime-context";
 import { toast } from "./toasts";
@@ -31,6 +33,8 @@ export function App() {
       <CommandPalette />
       <ShortcutsSettings />
       <ContextMenu />
+      <AiPanel />
+      <AiSettings />
       <Toasts />
     </div>
   );
@@ -44,8 +48,8 @@ function useKeyboardHost() {
     const onKeyDown = (e: KeyboardEvent) => {
       trackModifiers(runtime, e);
       if (e.defaultPrevented || e.isComposing) return;
-      const { palette, shortcutsOpen, contextMenu } = store.getState();
-      keybindings.handleKeyDown(e, { modalOpen: palette.open || shortcutsOpen || contextMenu !== null });
+      const { palette, shortcutsOpen, contextMenu, ai } = store.getState();
+      keybindings.handleKeyDown(e, { modalOpen: palette.open || shortcutsOpen || contextMenu !== null || ai.settingsOpen });
     };
     const onModifiers = (e: KeyboardEvent | MouseEvent) => trackModifiers(runtime, e);
     window.addEventListener("keydown", onKeyDown);

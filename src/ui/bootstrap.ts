@@ -5,8 +5,9 @@ import { DexieMetadataStore, PhotoDB } from "../adapters/db";
 import { BrowserLibraryProvider } from "../adapters/library-provider";
 import { BrowserPreviewService } from "../adapters/previews/preview-service";
 import { WorkerExportService } from "../adapters/render/export-service";
+import { BrowserVisionService } from "../adapters/render/vision-service";
 import { LocalSettingsStore } from "../adapters/settings";
-import { StubAIProvider } from "../adapters/stub-ai-provider";
+import { AnthropicProvider } from "../adapters/ai/anthropic-provider";
 import { detectMac } from "../core/keybindings/combo";
 import { MetadataSync } from "../core/library/metadata-sync";
 import { buildManifest } from "../core/manifest/build-manifest";
@@ -34,15 +35,20 @@ export async function createBrowserRuntime(): Promise<Runtime> {
   const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
   const db = new PhotoDB();
   const library = new BrowserLibraryProvider(db);
+  const settingsStore = new LocalSettingsStore();
+  const ai = new AnthropicProvider(settingsStore);
+  await ai.load();
   let sync: MetadataSync | null = null;
+  const previews = new BrowserPreviewService(library, db);
   const services: Services = {
-    settings: new LocalSettingsStore(),
+    settings: settingsStore,
     library,
     metadata: new DexieMetadataStore(db),
-    previews: new BrowserPreviewService(library, db),
+    previews,
+    vision: new BrowserVisionService(previews),
     persistence: { flush: () => sync?.flush() ?? Promise.resolve() },
     exporter: new WorkerExportService(),
-    ai: new StubAIProvider(),
+    ai,
     downloads: new BrowserDownloads(),
   };
   const runtime = createRuntime({

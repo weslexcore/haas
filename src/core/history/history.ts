@@ -61,7 +61,20 @@ export class History {
     return this.past;
   }
 
+  /** While suspended (e.g. an AI plan preview), new entries are discarded. */
+  private suspended = 0;
+
+  async withoutRecording<T>(fn: () => Promise<T>): Promise<T> {
+    this.suspended++;
+    try {
+      return await fn();
+    } finally {
+      this.suspended--;
+    }
+  }
+
   push(entry: HistoryEntry): void {
+    if (this.suspended > 0) return;
     if (entry.patches.length === 0 && !entry.effects?.length) return;
     const last = this.past.at(-1);
     if (

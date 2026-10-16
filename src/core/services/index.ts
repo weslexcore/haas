@@ -134,18 +134,61 @@ export interface Plan {
   steps: PlanStep[];
 }
 
+/** A read-only query the model may call while planning. */
+export interface AITool {
+  /** Action id, e.g. "library.photos.list". */
+  actionId: string;
+  description: string;
+  /** JSON Schema of the params object. */
+  inputSchema: Record<string, unknown>;
+}
+
 export interface AIRequest {
   prompt: string;
   /** The generated action manifest (actions.json contents). */
   manifest: unknown;
   /** Current app context, from query actions. */
   context: unknown;
+  /** Read-only queries the model can use to inspect the library before planning. */
+  tools: AITool[];
+  callTool(actionId: string, input: unknown): Promise<unknown>;
+  signal?: AbortSignal;
 }
+
+export type AIModel = "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5";
 
 export interface AIProvider {
   readonly name: string;
+  readonly model: AIModel;
   isConfigured(): boolean;
+  /** Set or clear the API key and model; persisted locally. */
+  configure(settings: { apiKey?: string | null; model?: AIModel }): Promise<void>;
   propose(request: AIRequest): Promise<Plan>;
+}
+
+export interface CapturedImage {
+  photoId: string;
+  mediaType: "image/jpeg";
+  /** Base64 JPEG data. */
+  data: string;
+  width: number;
+  height: number;
+  edited: boolean;
+}
+
+/** Renders photos as images an AI model can look at. */
+export interface VisionService {
+  capture(photo: PhotoRecord, opts: { maxEdge: number; edited: boolean }): Promise<CapturedImage>;
+}
+
+/** Query results carrying images (passed to the model as image content, not JSON). */
+export interface VisionResult {
+  kind: "images";
+  images: CapturedImage[];
+}
+
+export function isVisionResult(value: unknown): value is VisionResult {
+  return !!value && typeof value === "object" && (value as { kind?: unknown }).kind === "images" && Array.isArray((value as { images?: unknown }).images);
 }
 
 /** Hands a generated file to the user (browser download, or a server upload later). */
@@ -170,6 +213,7 @@ export interface Services {
   previews: PreviewService;
   persistence: PersistenceBarrier;
   exporter: ExportService;
+  vision: VisionService;
   ai: AIProvider;
   downloads: DownloadService;
 }

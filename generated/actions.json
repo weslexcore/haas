@@ -49,6 +49,10 @@
       "explanation": "The library is one folder (with subfolders). Ratings, flags and labels are stored in the app and, when the folder was opened with write access, in XMP sidecars next to the photos so Lightroom, Bridge and darktable can read them. The contents of photos are never modified."
     },
     {
+      "term": "Seeing photos",
+      "explanation": "Metadata (rating, flags, EXIF, capture time) comes from query actions. To judge what is in a photo (sharpness, faces, subject, colour, how an edit looks), view it with library.photos.view, which returns images with the current edits applied. Viewing costs tokens: scan with thumbnails, check focus with detail."
+    },
+    {
       "term": "Removing photos",
       "explanation": "Rejected photos can be removed from the library: they move, with their sidecars, into a _Rejected subfolder of the open folder and can be restored from there. Only emptying that folder deletes files, permanently (not to the system Trash), and it needs the user's explicit confirmation."
     },
@@ -66,6 +70,53 @@
     }
   ],
   "workflows": [
+    {
+      "title": "Reject the blurry frames in a burst",
+      "goal": "Keep the sharpest of several near-identical photos.",
+      "steps": [
+        {
+          "actionId": "library.photos.list",
+          "params": {
+            "capturedAfter": "2026-09-12T06:30",
+            "capturedBefore": "2026-09-12T06:35"
+          },
+          "note": "Find the burst by capture time."
+        },
+        {
+          "actionId": "library.photos.view",
+          "params": {
+            "photoIds": [
+              "DSC_0001.jpg",
+              "DSC_0002.jpg",
+              "DSC_0003.jpg"
+            ],
+            "size": "thumbnail"
+          },
+          "note": "Compare them; use detail size on the best candidates to check focus."
+        },
+        {
+          "actionId": "library.flag.set",
+          "params": {
+            "flag": "reject",
+            "photoIds": [
+              "DSC_0001.jpg",
+              "DSC_0003.jpg"
+            ]
+          },
+          "note": "Reject the softer frames."
+        },
+        {
+          "actionId": "library.flag.set",
+          "params": {
+            "flag": "pick",
+            "photoIds": [
+              "DSC_0002.jpg"
+            ]
+          },
+          "note": "Pick the sharpest."
+        }
+      ]
+    },
     {
       "title": "Give the selected photos a warm film look",
       "goal": "Warm, slightly faded, less saturated, as one undoable step.",
@@ -300,33 +351,26 @@
       "availability": "Always available."
     },
     {
-      "id": "app.ai.ask",
-      "title": "Ask AI",
-      "description": "Send a natural-language request to the AI provider together with the action manifest and current context. Returns a proposed plan (ordered actions with reasons) for the user to review; it does not apply anything.",
+      "id": "app.ai.settings.close",
+      "title": "Close AI Settings",
+      "description": "Close the AI settings screen.",
       "category": "App",
       "kind": "command",
       "undoable": false,
-      "params": {
-        "type": "object",
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "description": "What the user wants, in their own words."
-          }
-        },
-        "required": [
-          "prompt"
-        ]
-      },
-      "examples": [
-        {
-          "params": {
-            "prompt": "Show me only 4+ star photos"
-          },
-          "description": "Ask for a plan to filter the library."
-        }
-      ],
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [],
+      "availability": "Available only when AI settings are open."
+    },
+    {
+      "id": "app.ai.settings.open",
+      "title": "AI Settings…",
+      "description": "Open AI settings: the Anthropic API key (stored only in this browser) and which Claude model plans requests.",
+      "category": "App",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
       "defaultShortcuts": [],
       "availability": "Always available."
     },
@@ -1432,6 +1476,68 @@
             "capturedBefore": "2026-09-12T12:00"
           },
           "description": "4+ star photos from the morning of 12 September."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "library.photos.view",
+      "title": "View Photos",
+      "description": "Look at photos as images (for the AI): returns JPEGs of the given photos, with their current develop edits applied unless original is true. Use thumbnail size to scan many photos (duplicates, obvious blur, subjects), preview to judge a look or colour, detail to check focus. Viewing costs tokens: look only at what the request needs. At most 24 thumbnails, 8 previews or 3 detail images per call.",
+      "category": "Library",
+      "kind": "query",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "photoIds": {
+            "minItems": 1,
+            "maxItems": 24,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Photos to look at (ids from library.photos.list or the selection)."
+          },
+          "size": {
+            "description": "thumbnail 512px, preview 1024px (default), detail 1568px.",
+            "type": "string",
+            "enum": [
+              "thumbnail",
+              "preview",
+              "detail"
+            ]
+          },
+          "original": {
+            "description": "Show the unedited photo instead of the current edit.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "photoIds"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "photoIds": [
+              "DSC_0001.jpg"
+            ],
+            "size": "preview"
+          },
+          "description": "Look at one photo as currently edited."
+        },
+        {
+          "params": {
+            "photoIds": [
+              "DSC_0001.jpg",
+              "DSC_0002.jpg",
+              "DSC_0003.jpg"
+            ],
+            "size": "thumbnail"
+          },
+          "description": "Compare a burst for the sharpest frame."
         }
       ],
       "defaultShortcuts": [],

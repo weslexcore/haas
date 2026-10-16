@@ -16,6 +16,7 @@
     "verify": "yarn typecheck && yarn test && yarn manifest:check"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@tanstack/react-virtual": "^3.14.21",
     "dexie": "^4.4.6",
     "exifr": "^7.1.3",

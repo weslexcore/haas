@@ -31,6 +31,7 @@ const localTime = z
 
 export const openFolder = defineAction({
   id: "library.folder.open",
+  sideEffects: true,
   title: "Open Folder…",
   description:
     "Ask the user to choose a folder of photos and load it, replacing the current library. Subfolders are " +
@@ -47,6 +48,7 @@ export const openFolder = defineAction({
 
 export const reconnectFolder = defineAction({
   id: "library.folder.reconnect",
+  sideEffects: true,
   title: "Reconnect Folder",
   description:
     "Grant the browser permission to read the last-used folder again and reload it. Needed after a restart " +
@@ -65,6 +67,7 @@ export const reconnectFolder = defineAction({
 
 export const openRecentFolder = defineAction({
   id: "library.folder.openRecent",
+  sideEffects: true,
   title: "Open Recent Folder",
   description: "Reopen a previously used folder by id (see library.folders.recent). May ask the user for permission.",
   category: "Library",
@@ -89,6 +92,7 @@ export const recentFolders = defineAction({
 
 export const openSample = defineAction({
   id: "library.sample.load",
+  sideEffects: true,
   title: "Open Sample Library",
   description: "Load the built-in sample library of placeholder photos, for trying the app without real files.",
   category: "Library",
@@ -100,6 +104,7 @@ export const openSample = defineAction({
 
 export const restoreFolder = defineAction({
   id: "library.folder.restore",
+  sideEffects: true,
   title: "Restore Last Folder",
   description: "At startup, reopen the last folder if the browser still allows it; otherwise ask to reconnect.",
   category: "Library",
@@ -286,6 +291,46 @@ export const listPhotos = defineAction({
           (params.capturedBefore === undefined || p.capturedAt < params.capturedBefore),
       );
     return { total: matches.length, photos: matches.slice(0, params.limit ?? matches.length).map(publicPhoto) };
+  },
+});
+
+/** Size presets for viewing photos, and how many fit in one call. */
+const VIEW_SIZES = {
+  thumbnail: { maxEdge: 512, maxPhotos: 24 },
+  preview: { maxEdge: 1024, maxPhotos: 8 },
+  detail: { maxEdge: 1568, maxPhotos: 3 },
+} as const;
+
+export const viewPhotos = defineAction({
+  id: "library.photos.view",
+  title: "View Photos",
+  description:
+    "Look at photos as images (for the AI): returns JPEGs of the given photos, with their current develop " +
+    "edits applied unless original is true. Use thumbnail size to scan many photos (duplicates, obvious blur, " +
+    "subjects), preview to judge a look or colour, detail to check focus. Viewing costs tokens: look only at " +
+    "what the request needs. At most 24 thumbnails, 8 previews or 3 detail images per call.",
+  category: "Library",
+  kind: "query",
+  params: z.object({
+    photoIds: z.array(z.string()).min(1).max(24).describe("Photos to look at (ids from library.photos.list or the selection)."),
+    size: z.enum(["thumbnail", "preview", "detail"]).optional().describe("thumbnail 512px, preview 1024px (default), detail 1568px."),
+    original: z.boolean().optional().describe("Show the unedited photo instead of the current edit."),
+  }),
+  examples: [
+    { params: { photoIds: ["DSC_0001.jpg"], size: "preview" }, description: "Look at one photo as currently edited." },
+    { params: { photoIds: ["DSC_0001.jpg", "DSC_0002.jpg", "DSC_0003.jpg"], size: "thumbnail" }, description: "Compare a burst for the sharpest frame." },
+  ],
+  async run({ photoIds, size = "preview", original }, ctx) {
+    const preset = VIEW_SIZES[size];
+    if (photoIds.length > preset.maxPhotos) {
+      throw new Error(`At most ${preset.maxPhotos} photos at ${size} size per call; split the request or use a smaller size.`);
+    }
+    targetIds(ctx.state, photoIds);
+    const images = [];
+    for (const id of photoIds) {
+      images.push(await ctx.services.vision.capture(ctx.state.photos.byId[id]!, { maxEdge: preset.maxEdge, edited: !original }));
+    }
+    return { kind: "images" as const, images };
   },
 });
 
@@ -497,6 +542,7 @@ export const libraryActions = [
   selectAll,
   getSelection,
   listPhotos,
+  viewPhotos,
   setRating,
   setFlag,
   setColorLabel,

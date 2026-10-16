@@ -89,10 +89,22 @@ export interface ActionDefinition<P = void, R = unknown> {
    */
   internal?: boolean;
   /**
+   * Touches something outside app state that can't be previewed (files,
+   * persisted settings, downloads). AI plans never preview these steps; they
+   * run only when the plan is applied.
+   */
+  sideEffects?: boolean;
+  /**
    * Undoable commands: consecutive runs with the same key (within ~1.5s) merge
    * into one undo step, e.g. every frame of a slider drag.
    */
   coalesce?: (params: NoInfer<P>) => string;
+  /**
+   * The photo ids this invocation would change, for previews and AI plan
+   * review ("on 12 photos"). Defaults to `photoIds` or the selection for
+   * undoable Library/Develop commands.
+   */
+  targets?: (params: NoInfer<P>, ctx: ReadonlyContext) => string[];
   /** Human label for a specific invocation, used in the palette, history and plan review. */
   label?: (params: NoInfer<P>) => string;
   run(params: NoInfer<P>, ctx: AppContext): R | Promise<R>;

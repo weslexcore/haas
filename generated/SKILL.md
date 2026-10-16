@@ -36,6 +36,8 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 **Folders and sidecars.** The library is one folder (with subfolders). Ratings, flags and labels are stored in the app and, when the folder was opened with write access, in XMP sidecars next to the photos so Lightroom, Bridge and darktable can read them. The contents of photos are never modified.
 
+**Seeing photos.** Metadata (rating, flags, EXIF, capture time) comes from query actions. To judge what is in a photo (sharpness, faces, subject, colour, how an edit looks), view it with library.photos.view, which returns images with the current edits applied. Viewing costs tokens: scan with thumbnails, check focus with detail.
+
 **Removing photos.** Rejected photos can be removed from the library: they move, with their sidecars, into a _Rejected subfolder of the open folder and can be restored from there. Only emptying that folder deletes files, permanently (not to the system Trash), and it needs the user's explicit confirmation.
 
 **Views.** `grid` shows thumbnails for fast scanning, `loupe` shows the active photo large for close review, and `develop` shows the active photo with editing controls.
@@ -45,6 +47,15 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 **Undo and transactions.** Undoable commands are recorded in history. A transaction groups several commands into one undo step; AI-proposed plans are always applied as a single transaction after the user reviews them.
 
 ## Workflows
+
+### Reject the blurry frames in a burst
+
+Keep the sharpest of several near-identical photos.
+
+1. `library.photos.list` `{"capturedAfter":"2026-09-12T06:30","capturedBefore":"2026-09-12T06:35"}`: Find the burst by capture time.
+2. `library.photos.view` `{"photoIds":["DSC_0001.jpg","DSC_0002.jpg","DSC_0003.jpg"],"size":"thumbnail"}`: Compare them; use detail size on the best candidates to check focus.
+3. `library.flag.set` `{"flag":"reject","photoIds":["DSC_0001.jpg","DSC_0003.jpg"]}`: Reject the softer frames.
+4. `library.flag.set` `{"flag":"pick","photoIds":["DSC_0002.jpg"]}`: Pick the sharpest.
 
 ### Give the selected photos a warm film look
 
@@ -122,21 +133,21 @@ Examples:
 - `{}`: List all actions.
 - `{"category":"Library","availableOnly":true}`: Library actions usable right now.
 
-#### Ask AI: `app.ai.ask`
+#### Close AI Settings: `app.ai.settings.close`
 
 Command
 
-Send a natural-language request to the AI provider together with the action manifest and current context. Returns a proposed plan (ordered actions with reasons) for the user to review; it does not apply anything.
+Close the AI settings screen.
+
+*Available only when AI settings are open.*
+
+#### AI Settings…: `app.ai.settings.open`
+
+Command
+
+Open AI settings: the Anthropic API key (stored only in this browser) and which Claude model plans requests.
 
 *Always available.*
-
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `prompt` | string | yes | What the user wants, in their own words. |
-
-Examples:
-
-- `{"prompt":"Show me only 4+ star photos"}`: Ask for a plan to filter the library.
 
 #### Set Auto-Advance: `app.autoAdvance.set`
 
@@ -587,6 +598,25 @@ Examples:
 - `{"minRating":4}`: Photos rated 4 or 5 stars.
 - `{"flags":["reject"]}`: All rejected photos.
 - `{"minRating":4,"capturedAfter":"2026-09-12T05:00","capturedBefore":"2026-09-12T12:00"}`: 4+ star photos from the morning of 12 September.
+
+#### View Photos: `library.photos.view`
+
+Query (no side effects)
+
+Look at photos as images (for the AI): returns JPEGs of the given photos, with their current develop edits applied unless original is true. Use thumbnail size to scan many photos (duplicates, obvious blur, subjects), preview to judge a look or colour, detail to check focus. Viewing costs tokens: look only at what the request needs. At most 24 thumbnails, 8 previews or 3 detail images per call.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `photoIds` | string[] | yes | Photos to look at (ids from library.photos.list or the selection). |
+| `size` | `"thumbnail"` \| `"preview"` \| `"detail"` | no | thumbnail 512px, preview 1024px (default), detail 1568px. |
+| `original` | boolean | no | Show the unedited photo instead of the current edit. |
+
+Examples:
+
+- `{"photoIds":["DSC_0001.jpg"],"size":"preview"}`: Look at one photo as currently edited.
+- `{"photoIds":["DSC_0001.jpg","DSC_0002.jpg","DSC_0003.jpg"],"size":"thumbnail"}`: Compare a burst for the sharpest frame.
 
 #### Set Rating: `library.rating.set`
 

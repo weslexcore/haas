@@ -33,6 +33,8 @@ export class MetadataSync {
         return;
       }
       if (state.photos.byId === prev.photos.byId) return;
+      // An AI plan preview (and leaving it) is never persisted; applying the plan is a normal change.
+      if (state.ai.previewing || prev.ai.previewing) return;
       for (const id of state.photos.order) {
         const now = state.photos.byId[id];
         const before = prev.photos.byId[id];

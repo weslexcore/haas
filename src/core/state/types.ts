@@ -110,6 +110,11 @@ export interface AppState {
   contextMenu: ContextMenuState | null;
   shortcutsOpen: boolean;
   develop: DevelopState;
+  ai: {
+    /** An AI plan is being previewed: state shows its effects but nothing is persisted or recorded. */
+    previewing: boolean;
+    settingsOpen: boolean;
+  };
   library: {
     folder: FolderInfo | null;
     status: LibraryStatus;
@@ -144,6 +149,7 @@ export const initialState: AppState = {
   contextMenu: null,
   shortcutsOpen: false,
   develop: { clipboard: null, cropTool: false },
+  ai: { previewing: false, settingsOpen: false },
   library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0 },
   photos: { order: [], byId: {} },
   selection: { activeId: null, ids: [] },
