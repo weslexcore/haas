@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { StoreApi } from "zustand/vanilla";
 import type { AppState } from "../state/types";
 import type { Services } from "../services";
-import type { History } from "../history/history";
+import type { History, HistoryEffect } from "../history/history";
 import type { ActionRegistry } from "./registry";
 import type { KeybindingService } from "../keybindings/service";
 import type { MenuRegistry } from "../menus/registry";
@@ -16,7 +16,18 @@ interface Frame {
   patches: Patch[];
   /** Inverse patches per update, in application order; reversed on undo/rollback. */
   inverseChunks: Patch[][];
+  effects: HistoryEffect[];
+  coalesceKey?: string;
 }
+
+const newFrame = (label: string, source: DispatchSource, coalesceKey?: string): Frame => ({
+  label,
+  source,
+  patches: [],
+  inverseChunks: [],
+  effects: [],
+  ...(coalesceKey ? { coalesceKey } : {}),
+});
 
 export interface DispatchOptions {
   source?: DispatchSource;
@@ -86,14 +97,14 @@ export class Dispatcher {
    */
   async transaction<R>(label: string, fn: (d: Dispatcher) => Promise<R>, opts: DispatchOptions = {}): Promise<R> {
     if (this.frame) return fn(this);
-    const frame: Frame = { label, source: opts.source ?? "script", patches: [], inverseChunks: [] };
+    const frame = newFrame(label, opts.source ?? "script");
     this.frame = frame;
     try {
       const value = await fn(this);
       this.commit(frame);
       return value;
     } catch (error) {
-      this.rollback(frame.inverseChunks);
+      await this.rollback(frame.inverseChunks, frame.effects);
       throw error;
     } finally {
       this.frame = null;
@@ -139,10 +150,12 @@ export class Dispatcher {
     const recording = action.kind === "command" && !!action.undoable;
     const ownsFrame = recording && !this.frame;
     if (ownsFrame) {
-      this.frame = { label: action.label?.(parsed) ?? action.title, source, patches: [], inverseChunks: [] };
+      this.frame = newFrame(action.label?.(parsed) ?? action.title, source, action.coalesce?.(parsed));
     }
     const frame = recording ? this.frame : null;
-    const start = frame ? { patches: frame.patches.length, chunks: frame.inverseChunks.length } : null;
+    const start = frame
+      ? { patches: frame.patches.length, chunks: frame.inverseChunks.length, effects: frame.effects.length }
+      : null;
 
     try {
       const value = (await action.run(parsed, this.createContext(source, frame))) as R;
@@ -151,9 +164,10 @@ export class Dispatcher {
     } catch (error) {
       // Undo only this action's own changes, leaving any enclosing transaction intact.
       if (frame && start) {
-        this.rollback(frame.inverseChunks.slice(start.chunks));
+        await this.rollback(frame.inverseChunks.slice(start.chunks), frame.effects.slice(start.effects));
         frame.patches.length = start.patches;
         frame.inverseChunks.length = start.chunks;
+        frame.effects.length = start.effects;
       }
       return { ok: false, error: "failed", message: error instanceof Error ? error.message : String(error) };
     } finally {
@@ -187,6 +201,10 @@ export class Dispatcher {
           frame.inverseChunks.push(inverse);
         }
       },
+      recordEffect: (effect) => {
+        if (!frame) throw new Error("recordEffect is only for undoable commands.");
+        frame.effects.push(effect);
+      },
       dispatch: (id, params) => this.dispatch(id, params, { source }),
       historyControl: { undo: () => history.undo(), redo: () => history.redo(), clear: () => history.clear() },
     };
@@ -199,10 +217,15 @@ export class Dispatcher {
       patches: frame.patches,
       inverse: frame.inverseChunks.toReversed().flat(),
       at: Date.now(),
+      ...(frame.effects.length ? { effects: frame.effects } : {}),
+      ...(frame.coalesceKey ? { coalesceKey: frame.coalesceKey } : {}),
     });
   }
 
-  private rollback(inverseChunks: Patch[][]): void {
+  private async rollback(inverseChunks: Patch[][], effects: HistoryEffect[] = []): Promise<void> {
+    for (const effect of effects.toReversed()) {
+      await effect.undo().catch((e) => console.error("Rollback of a side effect failed", e));
+    }
     if (inverseChunks.length === 0) return;
     const { store } = this.deps;
     store.setState(applyPatches(store.getState(), inverseChunks.toReversed().flat()), true);

@@ -131,6 +131,15 @@ test("remove rejected photos to _Rejected, restore them, then delete for good", 
   expect(await readShootFile(page, "_Rejected/IMG_0002.jpg")).not.toBeNull();
   expect(await readShootFile(page, "_Rejected/IMG_0002.xmp")).toContain('xmp:Rating="-1"');
 
+  // ⌘Z puts the file back; ⌘⇧Z removes it again.
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(grid(page).getByRole("listitem")).toHaveCount(4);
+  expect(await readShootFile(page, "IMG_0002.jpg")).not.toBeNull();
+  await expect(removed).toBeHidden();
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(grid(page).getByRole("listitem")).toHaveCount(3);
+  expect(await readShootFile(page, "_Rejected/IMG_0002.jpg")).not.toBeNull();
+
   // Survives a reload: still out of the library, still restorable.
   await page.reload();
   await expect(grid(page).getByRole("listitem")).toHaveCount(3);

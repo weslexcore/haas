@@ -68,7 +68,7 @@ function useResultToasts() {
         if (!result.ok || !["library.rejected.remove", "library.removed.restore", "library.removed.empty"].includes(id)) return;
         const v = (result.value ?? {}) as { removed?: number; restored?: number; deleted?: number; failed?: Array<{ path: string; error: string }> };
         const n = (k: number) => (k === 1 ? "1 photo" : `${k} photos`);
-        if (id === "library.rejected.remove" && v.removed) toast(`Moved ${n(v.removed)} to the _Rejected folder. Restore them any time from the filter bar.`);
+        if (id === "library.rejected.remove" && v.removed) toast(`Moved ${n(v.removed)} to the _Rejected folder. Undo brings them back.`);
         if (id === "library.removed.restore" && v.restored) toast(`Restored ${n(v.restored)}.`);
         if (id === "library.removed.empty") toast(`Permanently deleted ${n(v.deleted ?? 0)}.`);
         if (v.failed?.length) {

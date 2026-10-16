@@ -5,6 +5,7 @@ import type { WhenClause } from "./when";
 import type { ActionRegistry } from "./registry";
 import type { KeybindingService } from "../keybindings/service";
 import type { MenuRegistry } from "../menus/registry";
+import type { HistoryEffect } from "../history/history";
 
 export type Category = "App" | "View" | "Navigation" | "Library" | "Develop" | "History";
 
@@ -56,8 +57,13 @@ export interface AppContext extends ReadonlyContext {
   readonly menus: MenuRegistry;
   readonly source: DispatchSource;
   dispatch<R = unknown>(id: string, params?: unknown): Promise<DispatchResult<R>>;
+  /**
+   * Undoable commands only: register a side effect outside app state (such as
+   * moving files) that undo/redo must reverse along with the state changes.
+   */
+  recordEffect(effect: HistoryEffect): void;
   /** Undo / redo / clear, for history actions and folder loading only. */
-  readonly historyControl: { undo(): boolean; redo(): boolean; clear(): void };
+  readonly historyControl: { undo(): Promise<boolean>; redo(): Promise<boolean>; clear(): void };
 }
 
 export interface ActionDefinition<P = void, R = unknown> {
@@ -82,6 +88,11 @@ export interface ActionDefinition<P = void, R = unknown> {
    * shortcuts screen and manifest.
    */
   internal?: boolean;
+  /**
+   * Undoable commands: consecutive runs with the same key (within ~1.5s) merge
+   * into one undo step, e.g. every frame of a slider drag.
+   */
+  coalesce?: (params: NoInfer<P>) => string;
   /** Human label for a specific invocation, used in the palette, history and plan review. */
   label?: (params: NoInfer<P>) => string;
   run(params: NoInfer<P>, ctx: AppContext): R | Promise<R>;

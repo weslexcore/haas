@@ -9,10 +9,11 @@ export const removeRejected = defineAction({
   title: "Remove Rejected Photos",
   description:
     `Move rejected photos (and their XMP sidecars) out of the library into the folder's ${TRASH_DIR} ` +
-    "subfolder. Nothing is deleted: Restore Removed Photos brings them back until that folder is emptied. " +
-    "Defaults to every rejected photo; photoIds limits it to some of them. Clears undo history.",
+    "subfolder. Nothing is deleted: undo, or Restore Removed Photos, brings them back until that folder is " +
+    "emptied. Defaults to every rejected photo; photoIds limits it to some of them.",
   category: "Library",
   kind: "command",
+  undoable: true,
   when: all(folderWritable, hasRejected),
   params: z
     .object({
@@ -36,9 +37,10 @@ export const removeRejected = defineAction({
 export const restoreRemoved = defineAction({
   id: "library.removed.restore",
   title: "Restore Removed Photos",
-  description: `Move photos back from the ${TRASH_DIR} subfolder to where they were, with their ratings and sidecars. Defaults to all of them.`,
+  description: `Move photos back from the ${TRASH_DIR} subfolder to where they were, with their ratings and sidecars. Defaults to all of them. Undoable.`,
   category: "Library",
   kind: "command",
+  undoable: true,
   when: all(folderWritable, hasRemoved),
   params: z
     .object({
@@ -57,7 +59,7 @@ export const emptyRemoved = defineAction({
   title: "Delete Removed Photos Permanently",
   description:
     `Permanently delete everything in the ${TRASH_DIR} subfolder. This cannot be undone and the files do not ` +
-    "go to the system Trash. Requires confirm: true; always ask the user before doing this.",
+    "go to the system Trash, and it clears undo history. Requires confirm: true; always ask the user first.",
   category: "Library",
   kind: "command",
   when: all(folderWritable, hasRemoved),

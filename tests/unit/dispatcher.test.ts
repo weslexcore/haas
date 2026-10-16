@@ -115,6 +115,55 @@ describe("dispatcher", () => {
     expect(ratingOf(rt, "DSC_0002.jpg")).toBe(0);
   });
 
+  it("coalesces consecutive runs with the same key into one undo step", async () => {
+    const drag = defineAction({
+      id: "test.drag",
+      title: "Drag",
+      description: "Sets a rating as if dragging a slider.",
+      category: "Library",
+      kind: "command",
+      undoable: true,
+      params: z.object({ value: z.number() }),
+      examples: [{ params: { value: 1 }, description: "x" }],
+      coalesce: () => "drag",
+      run({ value }, ctx) {
+        ctx.update((s) => {
+          s.photos.byId["DSC_0001.jpg"]!.rating = value;
+        });
+      },
+    });
+    const rt = await createTestRuntime({ actions: [...allActions, drag] });
+    for (const v of [1, 2, 3, 4]) await rt.dispatch("test.drag", { value: v });
+    expect(rt.history.entries).toHaveLength(1);
+    await rt.dispatch("library.flag.set", { flag: "pick" });
+    await rt.dispatch("test.drag", { value: 5 }); // not merged across another step
+    expect(rt.history.entries).toHaveLength(3);
+    await rt.dispatch("history.undo");
+    await rt.dispatch("history.undo");
+    await rt.dispatch("history.undo");
+    expect(ratingOf(rt, "DSC_0001.jpg")).toBe(0);
+  });
+
+  it("rolls back recorded side effects when a command fails", async () => {
+    const log: string[] = [];
+    const failing = defineAction({
+      id: "test.effectThenFail",
+      title: "Effect then fail",
+      description: "Records a side effect, then throws.",
+      category: "Library",
+      kind: "command",
+      undoable: true,
+      run(_, ctx) {
+        ctx.recordEffect({ undo: async () => void log.push("undone"), redo: async () => void log.push("redone") });
+        throw new Error("nope");
+      },
+    });
+    const rt = await createTestRuntime({ actions: [...allActions, failing] });
+    expect(await rt.dispatch("test.effectThenFail")).toMatchObject({ ok: false });
+    expect(log).toEqual(["undone"]);
+    expect(rt.history.canUndo).toBe(false);
+  });
+
   it("clears redo after a new change", async () => {
     const rt = await createTestRuntime();
     await rt.dispatch("library.rating.set", { rating: 1 });

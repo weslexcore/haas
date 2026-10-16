@@ -120,3 +120,63 @@ describe("palette parameter step", () => {
     expect(ask("navigation.next")).toBe(false);
   });
 });
+
+describe("undo and redo of removal", () => {
+  it("undo moves the files back and restores the exact previous state; redo removes again", async () => {
+    const { rt, source } = await openShoot();
+    await rt.dispatch("library.selection.set", { ids: ["IMG_2.jpg"] });
+    const before = rt.store.getState().photos;
+    await rt.dispatch("library.rejected.remove");
+    expect(rt.history.getSnapshot().undoLabel).toBe("Remove Rejected Photos");
+
+    expect(await rt.dispatch("history.undo")).toMatchObject({ ok: true, value: true });
+    expect(rt.store.getState().photos).toEqual(before);
+    expect(rt.store.getState().selection.activeId).toBe("IMG_2.jpg");
+    expect(rt.store.getState().library.removedCount).toBe(0);
+    expect(source.files.has("IMG_2.jpg")).toBe(true);
+    expect(source.files.has("IMG_2.xmp")).toBe(true);
+
+    await rt.dispatch("history.redo");
+    expect(source.files.has("_Rejected/IMG_2.jpg")).toBe(true);
+    expect(ids(rt)).not.toContain("IMG_2.jpg");
+  });
+
+  it("earlier edits stay undoable after a removal (undo the removal first)", async () => {
+    const { rt } = await openShoot();
+    await rt.dispatch("library.rating.set", { rating: 5, photoIds: ["IMG_2.jpg"] });
+    await rt.dispatch("library.rejected.remove");
+    await rt.dispatch("history.undo"); // brings IMG_2 back
+    await rt.dispatch("history.undo"); // its rating change
+    expect(rt.store.getState().photos.byId["IMG_2.jpg"]!.rating).toBe(2);
+  });
+
+  it("a failed undo changes nothing and keeps the step undoable", async () => {
+    const { rt, source } = await openShoot();
+    await rt.dispatch("library.flag.set", { flag: "reject", photoIds: ["IMG_4.jpg"] });
+    await rt.dispatch("library.rejected.remove"); // IMG_2 and IMG_4
+    source.files.set("IMG_4.jpg", { data: new Blob(["someone else's file"]), lastModified: 1 });
+
+    const r = await rt.dispatch("history.undo");
+    expect(r).toMatchObject({ ok: false, error: "failed" });
+    expect(source.files.has("_Rejected/IMG_2.jpg")).toBe(true); // put back after the partial move
+    expect(ids(rt)).not.toContain("IMG_2.jpg");
+    expect(rt.history.canUndo).toBe(true);
+    expect(await source.files.get("IMG_4.jpg")!.data.text()).toBe("someone else's file");
+  });
+
+  it("restore is undoable too", async () => {
+    const { rt, source } = await openShoot();
+    await rt.dispatch("library.rejected.remove");
+    await rt.dispatch("library.removed.restore");
+    await rt.dispatch("history.undo");
+    expect(source.files.has("_Rejected/IMG_2.jpg")).toBe(true);
+    expect(rt.store.getState().library.removedCount).toBe(1);
+  });
+
+  it("permanent delete clears history", async () => {
+    const { rt } = await openShoot();
+    await rt.dispatch("library.rejected.remove");
+    await rt.dispatch("library.removed.empty", { confirm: true });
+    expect(rt.history.canUndo).toBe(false);
+  });
+});
