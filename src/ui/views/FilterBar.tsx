@@ -138,7 +138,7 @@ function RemovedPhotos({ count }: { count: number }) {
         type="button"
         className={`${styles.clear} ${styles.danger}`}
         onClick={() => {
-          if (confirm(`Permanently delete ${photos} in the _Rejected folder? This can't be undone, and they won't go to the system Trash.`)) {
+          if (confirm(`Permanently delete ${photos} in the _Rejected folder? This can't be undone (it also clears undo history), and they won't go to the system Trash.`)) {
             void dispatch("library.removed.empty", { confirm: true });
           }
         }}

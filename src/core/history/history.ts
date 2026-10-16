@@ -3,13 +3,28 @@ import type { StoreApi } from "zustand/vanilla";
 import type { AppState } from "../state/types";
 import type { DispatchSource } from "../actions/types";
 
+/**
+ * A side effect outside app state (e.g. moving files) that an undo step must
+ * reverse. undo() runs before the inverse patches, redo() before the patches.
+ * Each should either fully succeed or leave things as they were and throw.
+ */
+export interface HistoryEffect {
+  undo(): Promise<void>;
+  redo(): Promise<void>;
+}
+
 export interface HistoryEntry {
   label: string;
   source: DispatchSource;
   patches: Patch[];
   inverse: Patch[];
   at: number;
+  effects?: HistoryEffect[];
+  /** Consecutive entries with the same key, close together in time, merge into one (e.g. a slider drag). */
+  coalesceKey?: string;
 }
+
+const COALESCE_MS = 1500;
 
 export interface HistorySnapshot {
   canUndo: boolean;
@@ -26,6 +41,8 @@ const MAX_ENTRIES = 200;
  */
 export class History {
   private past: HistoryEntry[] = [];
+  /** An undo/redo with effects is in progress; further requests are ignored until it finishes. */
+  private busy = false;
   private future: HistoryEntry[] = [];
   private listeners = new Set<() => void>();
   private snapshot: HistorySnapshot = { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null };
@@ -45,7 +62,23 @@ export class History {
   }
 
   push(entry: HistoryEntry): void {
-    if (entry.patches.length === 0) return;
+    if (entry.patches.length === 0 && !entry.effects?.length) return;
+    const last = this.past.at(-1);
+    if (
+      entry.coalesceKey &&
+      last?.coalesceKey === entry.coalesceKey &&
+      !last.effects?.length &&
+      !entry.effects?.length &&
+      entry.at - last.at < COALESCE_MS
+    ) {
+      last.patches.push(...entry.patches);
+      last.inverse = [...entry.inverse, ...last.inverse];
+      last.at = entry.at;
+      last.label = entry.label;
+      this.future = [];
+      this.emit();
+      return;
+    }
     this.past.push(entry);
     if (this.past.length > MAX_ENTRIES) this.past.shift();
     this.future = [];
@@ -60,22 +93,37 @@ export class History {
     this.emit();
   }
 
-  undo(): boolean {
-    const entry = this.past.pop();
-    if (!entry) return false;
-    this.store.setState(applyPatches(this.store.getState(), entry.inverse), true);
-    this.future.push(entry);
-    this.emit();
-    return true;
+  /** Undo the last entry. If one of its effects fails, nothing changes and the error is rethrown. */
+  async undo(): Promise<boolean> {
+    const entry = this.past.at(-1);
+    if (!entry || this.busy) return false;
+    this.busy = true;
+    try {
+      for (const effect of (entry.effects ?? []).toReversed()) await effect.undo();
+      this.store.setState(applyPatches(this.store.getState(), entry.inverse), true);
+      this.past.pop();
+      this.future.push(entry);
+      this.emit();
+      return true;
+    } finally {
+      this.busy = false;
+    }
   }
 
-  redo(): boolean {
-    const entry = this.future.pop();
-    if (!entry) return false;
-    this.store.setState(applyPatches(this.store.getState(), entry.patches), true);
-    this.past.push(entry);
-    this.emit();
-    return true;
+  async redo(): Promise<boolean> {
+    const entry = this.future.at(-1);
+    if (!entry || this.busy) return false;
+    this.busy = true;
+    try {
+      for (const effect of entry.effects ?? []) await effect.redo();
+      this.store.setState(applyPatches(this.store.getState(), entry.patches), true);
+      this.future.pop();
+      this.past.push(entry);
+      this.emit();
+      return true;
+    } finally {
+      this.busy = false;
+    }
   }
 
   getSnapshot = (): HistorySnapshot => this.snapshot;

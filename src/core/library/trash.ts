@@ -1,4 +1,6 @@
 import type { AppContext } from "../actions/types";
+import type { HistoryEffect } from "../history/history";
+import type { PhotoSource } from "../services";
 import { selectVisibleIds } from "../state/selectors";
 import { indexPhotos } from "./indexer";
 import { buildRecords } from "./load";
@@ -14,8 +16,37 @@ function currentSource(ctx: AppContext) {
 }
 
 /**
+ * Undo/redo for file moves. All-or-nothing: if some files can't be moved,
+ * the ones that did move are moved back and the step fails without changes.
+ */
+function moveEffect(ctx: AppContext, source: PhotoSource, paths: string[], direction: "toTrash" | "fromTrash"): HistoryEffect {
+  const ensureSameFolder = () => {
+    if (ctx.services.library.current() !== source) throw new Error("A different folder is open now.");
+  };
+  const toTrash = async () => {
+    ensureSameFolder();
+    await ctx.services.persistence.flush();
+    const r = await source.moveToTrash(paths);
+    if (r.failed.length) {
+      await source.restoreFromTrash(r.done);
+      throw new Error(`Couldn't move ${r.failed[0]!.path} to _Rejected: ${r.failed[0]!.error}`);
+    }
+  };
+  const fromTrash = async () => {
+    ensureSameFolder();
+    const r = await source.restoreFromTrash(paths);
+    if (r.failed.length) {
+      await source.moveToTrash(r.done.map((f) => f.path));
+      throw new Error(`Couldn't restore ${r.failed[0]!.path}: ${r.failed[0]!.error}`);
+    }
+  };
+  return direction === "toTrash" ? { undo: fromTrash, redo: toTrash } : { undo: toTrash, redo: fromTrash };
+}
+
+/**
  * Move photos (with sidecars) into the folder's _Rejected subfolder and drop
- * them from the library. Reversible with restorePhotos until the trash is emptied.
+ * them from the library. Undoable (the files move back), and restorable until
+ * the trash is emptied. Must run inside an undoable command.
  */
 export async function removePhotos(ctx: AppContext, ids: string[]) {
   const source = currentSource(ctx);
@@ -26,8 +57,7 @@ export async function removePhotos(ctx: AppContext, ids: string[]) {
   const visibleBefore = selectVisibleIds(ctx.state);
   const { done, failed } = await source.moveToTrash(ids);
   const gone = new Set(done);
-  // Undo entries can refer to removed photos; restoring is the way back.
-  ctx.historyControl.clear();
+  if (done.length) ctx.recordEffect(moveEffect(ctx, source, done, "toTrash"));
   ctx.update((s) => {
     s.photos.order = s.photos.order.filter((id) => !gone.has(id));
     for (const id of gone) delete s.photos.byId[id];
@@ -44,11 +74,12 @@ export async function removePhotos(ctx: AppContext, ids: string[]) {
   return { removed: done.length, failed };
 }
 
-/** Move photos back from the _Rejected subfolder (all of them if no paths are given). */
+/** Move photos back from the _Rejected subfolder (all of them if no paths are given). Undoable. */
 export async function restorePhotos(ctx: AppContext, paths?: string[]) {
   const source = currentSource(ctx);
   const { done, failed } = await source.restoreFromTrash(paths);
   const records = await buildRecords(ctx, source, done);
+  if (done.length) ctx.recordEffect(moveEffect(ctx, source, done.map((f) => f.path), "fromTrash"));
   ctx.update((s) => {
     for (const r of records) s.photos.byId[r.id] = r;
     s.photos.order = [...new Set([...s.photos.order, ...records.map((r) => r.id)])].sort(numeric);
@@ -60,12 +91,16 @@ export async function restorePhotos(ctx: AppContext, paths?: string[]) {
   return { restored: records.length, failed };
 }
 
-/** Permanently delete everything in the _Rejected subfolder. */
+/**
+ * Permanently delete everything in the _Rejected subfolder. Not undoable, and
+ * it clears undo history: earlier removals can no longer be reversed.
+ */
 export async function emptyTrash(ctx: AppContext) {
   const source = currentSource(ctx);
   const trashed = await source.listTrash();
   const deleted = await source.emptyTrash();
   await ctx.services.metadata.remove(source.folder.id, trashed.map((f) => f.path)).catch(() => undefined);
+  ctx.historyControl.clear();
   ctx.update((s) => {
     s.library.removedCount = 0;
   });

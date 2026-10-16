@@ -587,9 +587,9 @@ Examples:
 
 #### Remove Rejected Photos: `library.rejected.remove`
 
-Command · Shortcuts: `mod+backspace`
+Command, undoable · Shortcuts: `mod+backspace`
 
-Move rejected photos (and their XMP sidecars) out of the library into the folder's _Rejected subfolder. Nothing is deleted: Restore Removed Photos brings them back until that folder is emptied. Defaults to every rejected photo; photoIds limits it to some of them. Clears undo history.
+Move rejected photos (and their XMP sidecars) out of the library into the folder's _Rejected subfolder. Nothing is deleted: undo, or Restore Removed Photos, brings them back until that folder is emptied. Defaults to every rejected photo; photoIds limits it to some of them.
 
 *Available only when the folder was opened with write access and at least one photo is flagged rejected.*
 
@@ -606,7 +606,7 @@ Examples:
 
 Command
 
-Permanently delete everything in the _Rejected subfolder. This cannot be undone and the files do not go to the system Trash. Requires confirm: true; always ask the user before doing this.
+Permanently delete everything in the _Rejected subfolder. This cannot be undone and the files do not go to the system Trash, and it clears undo history. Requires confirm: true; always ask the user first.
 
 *Available only when the folder was opened with write access and the folder's _Rejected subfolder contains removed photos.*
 
@@ -628,9 +628,9 @@ Return photos in the _Rejected subfolder by their original path, with size and m
 
 #### Restore Removed Photos: `library.removed.restore`
 
-Command
+Command, undoable
 
-Move photos back from the _Rejected subfolder to where they were, with their ratings and sidecars. Defaults to all of them.
+Move photos back from the _Rejected subfolder to where they were, with their ratings and sidecars. Defaults to all of them. Undoable.
 
 *Available only when the folder was opened with write access and the folder's _Rejected subfolder contains removed photos.*
 
