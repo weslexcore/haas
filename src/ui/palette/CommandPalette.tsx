@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { requiresParams } from "../../core/actions/dispatcher";
-import { askAi } from "../ai/ai-store";
+import { sendToAi } from "../ai/ai-store";
 import { useAppState, useBindingsVersion } from "../hooks";
 import { useRuntime } from "../runtime-context";
 import { Kbd } from "../shell/Kbd";
@@ -59,7 +59,7 @@ function PaletteDialog({ initialActionId }: { initialActionId: string | null }) 
     if (!prompt) return;
     // The plan is reviewed in the AI panel, which stays open beside the photos for previewing.
     await runtime.dispatch("app.palette.close", undefined, { source: "palette" });
-    void askAi(runtime, prompt);
+    void sendToAi(runtime, prompt);
   }
 
   function choose(row: PaletteRow | undefined) {

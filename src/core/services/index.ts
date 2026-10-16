@@ -144,7 +144,12 @@ export interface AITool {
 }
 
 export interface AIRequest {
+  /** The user's words for this turn. */
   prompt: string;
+  /** The full message for this turn (context, suggestion status, request). */
+  message: string;
+  /** Earlier turns, replayed verbatim. */
+  history: Array<{ role: "user" | "assistant"; text: string }>;
   /** The generated action manifest (actions.json contents). */
   manifest: unknown;
   /** Current app context, from query actions. */

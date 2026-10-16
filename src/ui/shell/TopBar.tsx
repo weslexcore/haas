@@ -46,6 +46,9 @@ export function TopBar() {
           <span className={styles.searchText}>Search actions…</span>
           {paletteShortcut && <Kbd strokes={paletteShortcut.strokes} />}
         </ActionButton>
+        <ActionButton actionId="app.ai.panel.toggle" className={styles.icon} label="AI conversation">
+          <Icon name="sparkle" />
+        </ActionButton>
         <ActionButton actionId="history.undo" className={styles.icon}>
           <Icon name="undo" />
         </ActionButton>

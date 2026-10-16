@@ -17,6 +17,7 @@ import { allMenus } from "../menus";
 import { loadRecents } from "./palette/recents";
 import { toast } from "./toasts";
 import { syncUrlState } from "./url-state";
+import { syncAiThread } from "./ai/thread-sync";
 
 declare global {
   interface Window {
@@ -80,6 +81,7 @@ export async function createBrowserRuntime(): Promise<Runtime> {
 
   // Restores view and photo from the URL once the folder loads, then keeps the URL current.
   syncUrlState(runtime);
+  syncAiThread(runtime);
 
   // Not awaited: the UI renders straight away and shows loading progress.
   void runtime.dispatch("library.folder.restore", undefined, { source: "script" }).then((r) => {
