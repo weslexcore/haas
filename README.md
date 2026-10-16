@@ -28,6 +28,7 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | `Shift+F10`, right-click | Photo context menu |
 | `Z`, `I`, `F6` | Loupe zoom, info overlay, filmstrip |
 | `⌘L` / `Ctrl+L` | Clear filter |
+| `⌘⌫` / `Ctrl+Backspace` | Remove rejected photos (moved to `_Rejected/`; restore or delete them from the filter bar) |
 | `\` | Before/after (Develop only) |
 | `⌘Z` / `⇧⌘Z` | Undo, redo |
 | `T T` | Toggle light/dark theme (a chord) |

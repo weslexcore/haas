@@ -20,7 +20,7 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 ## Concepts
 
-**Library.** The set of photos currently loaded, in display order. Each photo has an id, file name, capture time, rating, flag and colour label. Original image files are never modified.
+**Library.** The set of photos currently loaded, in display order. Each photo has an id, file name, capture time, rating, flag and colour label. Image file contents are never modified.
 
 **Selection.** One or more selected photos, plus one active photo (the one shown in Loupe and Develop). Library commands that accept an optional `photoIds` parameter act on the selection when it is omitted.
 
@@ -34,7 +34,9 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 **Auto-advance.** After a rating, flag or label command on a single photo, the app can move to the next photo: only while Caps Lock is on (default, as in Lightroom), always, or never. AI and scripts pass advance: true instead.
 
-**Folders and sidecars.** The library is one folder (with subfolders). Ratings, flags and labels are stored in the app and, when the folder was opened with write access, in XMP sidecars next to the photos so Lightroom, Bridge and darktable can read them. Photos themselves are never modified.
+**Folders and sidecars.** The library is one folder (with subfolders). Ratings, flags and labels are stored in the app and, when the folder was opened with write access, in XMP sidecars next to the photos so Lightroom, Bridge and darktable can read them. The contents of photos are never modified.
+
+**Removing photos.** Rejected photos can be removed from the library: they move, with their sidecars, into a _Rejected subfolder of the open folder and can be restored from there. Only emptying that folder deletes files, permanently (not to the system Trash), and it needs the user's explicit confirmation.
 
 **Views.** `grid` shows thumbnails for fast scanning, `loupe` shows the active photo large for close review, and `develop` shows the active photo with editing controls.
 
@@ -583,6 +585,64 @@ Examples:
 - `{"rating":3}`: Give the selected photos 3 stars.
 - `{"rating":0,"photoIds":["DSC_0004.jpg"]}`: Clear the rating of one specific photo.
 
+#### Remove Rejected Photos: `library.rejected.remove`
+
+Command · Shortcuts: `mod+backspace`
+
+Move rejected photos (and their XMP sidecars) out of the library into the folder's _Rejected subfolder. Nothing is deleted: Restore Removed Photos brings them back until that folder is emptied. Defaults to every rejected photo; photoIds limits it to some of them. Clears undo history.
+
+*Available only when the folder was opened with write access and at least one photo is flagged rejected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `photoIds` | string[] | no | Only these rejected photos. Omit for all rejected photos. |
+
+Examples:
+
+- `{}`: Move every rejected photo to the _Rejected folder.
+- `{"photoIds":["DSC_0007.jpg"]}`: Move one rejected photo.
+
+#### Delete Removed Photos Permanently: `library.removed.empty`
+
+Command
+
+Permanently delete everything in the _Rejected subfolder. This cannot be undone and the files do not go to the system Trash. Requires confirm: true; always ask the user before doing this.
+
+*Available only when the folder was opened with write access and the folder's _Rejected subfolder contains removed photos.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `confirm` | boolean | yes | Must be true: confirms the user agreed to delete the files permanently. |
+
+Examples:
+
+- `{"confirm":true}`: After the user confirms, delete the removed photos for good.
+
+#### List Removed Photos: `library.removed.list`
+
+Query (no side effects)
+
+Return photos in the _Rejected subfolder by their original path, with size and modified time.
+
+*Always available.*
+
+#### Restore Removed Photos: `library.removed.restore`
+
+Command
+
+Move photos back from the _Rejected subfolder to where they were, with their ratings and sidecars. Defaults to all of them.
+
+*Available only when the folder was opened with write access and the folder's _Rejected subfolder contains removed photos.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `photoIds` | string[] | no | Original paths to restore (see List Removed Photos). Omit for all. |
+
+Examples:
+
+- `{}`: Restore everything that was removed.
+- `{"photoIds":["day2/IMG_0003.jpg"]}`: Restore one photo.
+
 #### Open Sample Library: `library.sample.load`
 
 Command
@@ -690,6 +750,7 @@ Right-click on a photo in the grid or filmstrip. Acts on the selection (the clic
 - Open in Loupe: `view.set` `{"view":"loupe"}`
 - Open in Develop: `view.set` `{"view":"develop"}`
 - Select All: `library.selection.all`
+- Remove Rejected Photos: `library.rejected.remove`
 
 ### Photo: `loupe.photo`
 

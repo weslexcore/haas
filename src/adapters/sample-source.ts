@@ -1,7 +1,9 @@
-import type { PhotoSource, SourceFile } from "../core/services";
+import type { FileOpResult, PhotoSource, SourceFile } from "../core/services";
 import type { FolderInfo } from "../core/state/types";
 
-export const SAMPLE_FOLDER: FolderInfo = { id: "sample", name: "Sample library", kind: "sample", canWriteSidecars: false };
+const READ_ONLY = "The sample library is read-only.";
+
+export const SAMPLE_FOLDER: FolderInfo = { id: "sample", name: "Sample library", kind: "sample", writable: false };
 
 /** Deterministic placeholder photos for trying the app (and for tests). There are no real files. */
 export class SampleSource implements PhotoSource {
@@ -34,6 +36,22 @@ export class SampleSource implements PhotoSource {
   }
 
   async writeSidecar(): Promise<void> {
-    throw new Error("The sample library is read-only.");
+    throw new Error(READ_ONLY);
+  }
+
+  async moveToTrash(): Promise<FileOpResult<string>> {
+    throw new Error(READ_ONLY);
+  }
+
+  async restoreFromTrash(): Promise<FileOpResult<SourceFile>> {
+    throw new Error(READ_ONLY);
+  }
+
+  async listTrash(): Promise<SourceFile[]> {
+    return [];
+  }
+
+  async emptyTrash(): Promise<number> {
+    throw new Error(READ_ONLY);
   }
 }

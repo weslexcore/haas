@@ -22,7 +22,7 @@ export const CONCEPTS: Concept[] = [
     term: "Library",
     explanation:
       "The set of photos currently loaded, in display order. Each photo has an id, file name, capture time, " +
-      "rating, flag and colour label. Original image files are never modified.",
+      "rating, flag and colour label. Image file contents are never modified.",
   },
   {
     term: "Selection",
@@ -59,7 +59,14 @@ export const CONCEPTS: Concept[] = [
     explanation:
       "The library is one folder (with subfolders). Ratings, flags and labels are stored in the app and, when " +
       "the folder was opened with write access, in XMP sidecars next to the photos so Lightroom, Bridge and " +
-      "darktable can read them. Photos themselves are never modified.",
+      "darktable can read them. The contents of photos are never modified.",
+  },
+  {
+    term: "Removing photos",
+    explanation:
+      "Rejected photos can be removed from the library: they move, with their sidecars, into a _Rejected " +
+      "subfolder of the open folder and can be restored from there. Only emptying that folder deletes files, " +
+      "permanently (not to the system Trash), and it needs the user's explicit confirmation.",
   },
   {
     term: "Views",

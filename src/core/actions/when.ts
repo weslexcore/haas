@@ -66,3 +66,17 @@ export const needsPermission = when(
   "the last folder needs permission to be reopened",
   (ctx) => ctx.state.library.status.kind === "needsPermission",
 );
+
+export const folderWritable = when(
+  "the folder was opened with write access",
+  (ctx) => !!ctx.state.library.folder?.writable,
+);
+
+export const hasRejected = when("at least one photo is flagged rejected", (ctx) =>
+  ctx.state.photos.order.some((id) => ctx.state.photos.byId[id]?.flag === "reject"),
+);
+
+export const hasRemoved = when(
+  "the folder's _Rejected subfolder contains removed photos",
+  (ctx) => ctx.state.library.removedCount > 0,
+);

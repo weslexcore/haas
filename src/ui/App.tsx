@@ -4,6 +4,7 @@ import { trackModifiers } from "./input-store";
 import { ContextMenu } from "./menus/ContextMenu";
 import { CommandPalette } from "./palette/CommandPalette";
 import { useRuntime } from "./runtime-context";
+import { toast } from "./toasts";
 import { ShortcutsSettings } from "./settings/ShortcutsSettings";
 import { StatusBar } from "./shell/StatusBar";
 import { Toasts } from "./shell/Toasts";
@@ -16,6 +17,7 @@ import styles from "./App.module.css";
 
 export function App() {
   useKeyboardHost();
+  useResultToasts();
   useThemeAttribute();
   const view = useAppState((s) => s.view);
 
@@ -55,6 +57,26 @@ function useKeyboardHost() {
       window.removeEventListener("pointerdown", onModifiers, true);
     };
   }, [runtime]);
+}
+
+/** Confirm file operations, whichever way they were started (keyboard, menu, palette, AI). */
+function useResultToasts() {
+  const { dispatcher } = useRuntime();
+  useEffect(
+    () =>
+      dispatcher.onDispatch(({ id, result }) => {
+        if (!result.ok || !["library.rejected.remove", "library.removed.restore", "library.removed.empty"].includes(id)) return;
+        const v = (result.value ?? {}) as { removed?: number; restored?: number; deleted?: number; failed?: Array<{ path: string; error: string }> };
+        const n = (k: number) => (k === 1 ? "1 photo" : `${k} photos`);
+        if (id === "library.rejected.remove" && v.removed) toast(`Moved ${n(v.removed)} to the _Rejected folder. Restore them any time from the filter bar.`);
+        if (id === "library.removed.restore" && v.restored) toast(`Restored ${n(v.restored)}.`);
+        if (id === "library.removed.empty") toast(`Permanently deleted ${n(v.deleted ?? 0)}.`);
+        if (v.failed?.length) {
+          toast(`${v.failed.length} file(s) couldn't be moved: ${v.failed.slice(0, 3).map((f) => `${f.path} (${f.error})`).join("; ")}`, "error", 10000);
+        }
+      }),
+    [dispatcher],
+  );
 }
 
 /** Applies the theme preference as data-theme on <html>, following the OS when set to "system". */

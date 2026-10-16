@@ -6,11 +6,11 @@ import { FileListSource, pickFilesFallback } from "./file-list-source";
 import { FsAccessSource } from "./fs-access-source";
 import { SAMPLE_FOLDER, SampleSource } from "./sample-source";
 
-const toInfo = (row: FolderRow, canWriteSidecars = false): FolderInfo => ({
+const toInfo = (row: FolderRow, writable = false): FolderInfo => ({
   id: row.id,
   name: row.name,
   kind: row.kind,
-  canWriteSidecars: row.kind === "fs-access" && canWriteSidecars,
+  writable: row.kind === "fs-access" && writable,
 });
 
 async function permission(handle: FileSystemDirectoryHandle, mode: "read" | "readwrite"): Promise<PermissionState> {

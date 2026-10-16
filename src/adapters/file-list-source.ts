@@ -1,7 +1,9 @@
 /// <reference path="./fs-types.d.ts" />
 import { imageMimeType, isSidecarPath, sidecarCandidates } from "../core/library/formats";
-import type { PhotoSource, SourceFile } from "../core/services";
+import type { FileOpResult, PhotoSource, SourceFile } from "../core/services";
 import type { FolderInfo } from "../core/state/types";
+
+const READ_ONLY = "This browser opened the folder read-only; ratings are kept in app storage and files can't be moved.";
 
 /**
  * Fallback for browsers without the File System Access API (Safari, iPad,
@@ -21,7 +23,7 @@ export class FileListSource implements PhotoSource {
       if (isSidecarPath(rel)) this.sidecars.set(rel.toLowerCase(), file);
       else if (imageMimeType(rel)) this.photos.set(rel, file);
     }
-    this.folder = { id: `files:${root}`, name: root, kind: "file-list", canWriteSidecars: false };
+    this.folder = { id: `files:${root}`, name: root, kind: "file-list", writable: false };
   }
 
   async listFiles(): Promise<SourceFile[]> {
@@ -45,7 +47,23 @@ export class FileListSource implements PhotoSource {
   }
 
   async writeSidecar(): Promise<void> {
-    throw new Error("This browser opened the folder read-only; ratings are kept in app storage.");
+    throw new Error(READ_ONLY);
+  }
+
+  async moveToTrash(): Promise<FileOpResult<string>> {
+    throw new Error(READ_ONLY);
+  }
+
+  async restoreFromTrash(): Promise<FileOpResult<SourceFile>> {
+    throw new Error(READ_ONLY);
+  }
+
+  async listTrash(): Promise<SourceFile[]> {
+    return [];
+  }
+
+  async emptyTrash(): Promise<number> {
+    throw new Error(READ_ONLY);
   }
 }
 

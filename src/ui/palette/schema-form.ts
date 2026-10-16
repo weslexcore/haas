@@ -101,3 +101,14 @@ function humanize(s: string): string {
   const spaced = s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
+
+/**
+ * Whether the palette should show a parameter step before running. Actions
+ * whose only parameters are optional id lists (e.g. "photoIds: default is the
+ * selection") run straight away; anything with a choice, text or number asks.
+ */
+export function shouldAskForParams(schema: JSONSchema | null, acceptsNoParams: boolean): boolean {
+  if (!schema) return false;
+  if (!acceptsNoParams) return true;
+  return fieldsFromSchema(schema).some((f) => f.kind !== "list");
+}

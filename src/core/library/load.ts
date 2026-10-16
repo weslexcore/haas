@@ -59,6 +59,13 @@ function buildRecord(
   return record;
 }
 
+/** Photo records for files, with culling metadata from app storage and sidecars. */
+export async function buildRecords(ctx: AppContext, source: PhotoSource, files: SourceFile[]): Promise<PhotoRecord[]> {
+  const stored = await ctx.services.metadata.load(source.folder.id);
+  const sidecars = await mapLimit(files, 16, (f) => source.readSidecar(f.path).catch(() => null));
+  return files.map((f, i) => buildRecord(f, stored.get(f.path), sidecars[i] ?? null));
+}
+
 /**
  * Replace the library with the contents of `source`: list files, restore
  * stored and sidecar metadata, then index EXIF in the background.
@@ -76,9 +83,8 @@ export async function loadSource(ctx: AppContext, source: PhotoSource): Promise<
   });
 
   try {
-    const [files, stored] = await Promise.all([source.listFiles(), ctx.services.metadata.load(folder.id)]);
-    const sidecars = await mapLimit(files, 16, (f) => source.readSidecar(f.path).catch(() => null));
-    const records = files.map((f, i) => buildRecord(f, stored.get(f.path), sidecars[i] ?? null));
+    const [files, trashed] = await Promise.all([source.listFiles(), source.listTrash().catch(() => [])]);
+    const records = await buildRecords(ctx, source, files);
     const unindexed = records.filter((r) => !r.indexed).map((r) => r.id);
 
     ctx.update((s) => {
@@ -88,6 +94,7 @@ export async function loadSource(ctx: AppContext, source: PhotoSource): Promise<
       };
       const first = selectVisibleIds(s)[0] ?? null;
       s.selection = { activeId: first, ids: first ? [first] : [] };
+      s.library.removedCount = trashed.length;
       s.library.status = unindexed.length
         ? { kind: "indexing", done: 0, total: unindexed.length }
         : records.length

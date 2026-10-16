@@ -5,6 +5,7 @@ import { historyActions } from "./history";
 import { libraryActions } from "./library";
 import { navigationActions } from "./navigation";
 import { shortcutActions } from "./shortcuts";
+import { trashActions } from "./trash";
 import { viewActions } from "./view";
 
 /** Every action in the app. Add new action modules here. */
@@ -14,6 +15,7 @@ export const allActions: readonly AnyAction[] = [
   ...viewActions,
   ...navigationActions,
   ...libraryActions,
+  ...trashActions,
   ...historyActions,
 ];
 

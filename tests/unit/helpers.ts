@@ -86,6 +86,7 @@ export async function createTestRuntime(
       library,
       metadata,
       previews: opts.previews ?? new FakePreviews(),
+      persistence: { flush: async () => undefined },
       ai: new StubAIProvider(),
       downloads: { save: (fileName, content) => downloads.push({ fileName, content }) },
     },

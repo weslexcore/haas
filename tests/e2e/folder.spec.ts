@@ -114,3 +114,40 @@ test("filter bar", async ({ page }) => {
   await page.getByRole("searchbox", { name: "Filter by file name" }).fill("day2");
   await expect(grid(page).getByRole("listitem")).toHaveCount(1);
 });
+
+test("remove rejected photos to _Rejected, restore them, then delete for good", async ({ page }) => {
+  await openShoot(page);
+  await cell(page, "IMG_0002.jpg").click();
+  await page.keyboard.press("x");
+  await page.evaluate(() => window.photo!.flushMetadata());
+
+  await page.keyboard.press("ControlOrMeta+Backspace");
+  await expect(grid(page).getByRole("listitem")).toHaveCount(3);
+  await expect(page.getByText("Moved 1 photo to the _Rejected folder")).toBeVisible();
+  const removed = page.getByRole("group", { name: "Removed photos" });
+  await expect(removed).toContainText("1 photo in _Rejected");
+  // Moved on disk, sidecar included; nothing deleted.
+  expect(await readShootFile(page, "IMG_0002.jpg")).toBeNull();
+  expect(await readShootFile(page, "_Rejected/IMG_0002.jpg")).not.toBeNull();
+  expect(await readShootFile(page, "_Rejected/IMG_0002.xmp")).toContain('xmp:Rating="-1"');
+
+  // Survives a reload: still out of the library, still restorable.
+  await page.reload();
+  await expect(grid(page).getByRole("listitem")).toHaveCount(3);
+  await removed.getByRole("button", { name: "Restore removed photos" }).click();
+  await expect(grid(page).getByRole("listitem")).toHaveCount(4);
+  expect(await readShootFile(page, "IMG_0002.xmp")).toContain('xmp:Label="Green"');
+
+  // Remove again, then delete permanently (after a confirmation).
+  await cell(page, "IMG_0002.jpg").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Remove Rejected Photos" }).click();
+  await expect(removed).toBeVisible();
+  page.once("dialog", (d) => {
+    expect(d.message()).toContain("Permanently delete 1 photo");
+    void d.accept();
+  });
+  await removed.getByRole("button", { name: "Delete…" }).click();
+  await expect(removed).toBeHidden();
+  expect(await readShootFile(page, "_Rejected/IMG_0002.jpg")).toBeNull();
+  expect(await readShootFile(page, "IMG_0001.jpg")).not.toBeNull();
+});

@@ -19,8 +19,17 @@ export const imageMimeType = (path: string): string | null => IMAGE_TYPES[extens
 
 export const isSidecarPath = (path: string) => extension(path) === "xmp";
 
-/** Folder names never scanned: hidden folders and NAS/OS metadata. */
-export const isIgnoredDir = (name: string) => name.startsWith(".") || name === "@eaDir" || name === "__MACOSX";
+/**
+ * Subfolder that "Remove Rejected Photos" moves photos into, mirroring their
+ * original paths. Never listed in the library; emptied only on request.
+ */
+export const TRASH_DIR = "_Rejected";
+
+/** Folder names never scanned: hidden folders, NAS/OS metadata, and the app's trash at the root. */
+export const isIgnoredDir = (name: string, atRoot: boolean) =>
+  name.startsWith(".") || name === "@eaDir" || name === "__MACOSX" || (atRoot && name === TRASH_DIR);
+
+export const trashPath = (path: string) => `${TRASH_DIR}/${path}`;
 
 /**
  * Possible sidecar paths for a photo, in preference order for new files:

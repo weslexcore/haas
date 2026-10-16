@@ -1,6 +1,7 @@
 import type { ColorLabel, Flag, SortKey } from "../../core/state/types";
 import { isFilterActive, selectVisibleIds } from "../../core/state/selectors";
 import { useAppState, useDispatch } from "../hooks";
+import { ActionButton } from "../shell/ActionButton";
 import styles from "./FilterBar.module.css";
 
 const FLAG_OPTIONS: Array<{ flag: Flag; label: string; mark: string }> = [
@@ -24,6 +25,7 @@ export function FilterBar() {
   const sort = useAppState((s) => s.library.sort);
   const shown = useAppState((s) => selectVisibleIds(s).length);
   const total = useAppState((s) => s.photos.order.length);
+  const removed = useAppState((s) => s.library.removedCount);
   const dispatch = useDispatch();
   const setFilter = (params: object) => void dispatch("library.filter.set", params);
 
@@ -117,6 +119,32 @@ export function FilterBar() {
           Clear
         </button>
       )}
+      {removed > 0 && <RemovedPhotos count={removed} />}
     </div>
+  );
+}
+
+/** Photos moved to _Rejected: restore them, or delete them for good after confirming. */
+function RemovedPhotos({ count }: { count: number }) {
+  const dispatch = useDispatch();
+  const photos = count === 1 ? "1 photo" : `${count} photos`;
+  return (
+    <span className={styles.removed} role="group" aria-label="Removed photos">
+      <span title="Moved to the _Rejected folder inside this folder">{photos} in _Rejected</span>
+      <ActionButton actionId="library.removed.restore" className={styles.clear} label="Restore removed photos">
+        Restore
+      </ActionButton>
+      <button
+        type="button"
+        className={`${styles.clear} ${styles.danger}`}
+        onClick={() => {
+          if (confirm(`Permanently delete ${photos} in the _Rejected folder? This can't be undone, and they won't go to the system Trash.`)) {
+            void dispatch("library.removed.empty", { confirm: true });
+          }
+        }}
+      >
+        Delete…
+      </button>
+    </span>
   );
 }

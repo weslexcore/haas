@@ -5,6 +5,8 @@ interface FileSystemPermissionDescriptor {
 }
 
 interface FileSystemHandle {
+  /** Chromium: rename/move within the same file system. */
+  move?(destination: FileSystemDirectoryHandle, newName?: string): Promise<void>;
   queryPermission?(descriptor?: FileSystemPermissionDescriptor): Promise<PermissionState>;
   requestPermission?(descriptor?: FileSystemPermissionDescriptor): Promise<PermissionState>;
 }

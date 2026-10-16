@@ -25,7 +25,7 @@ export interface SourceFile {
 
 /**
  * One opened folder of photos. Originals are only ever read; the only
- * writes are XMP sidecars, and only when `folder.canWriteSidecars`.
+ * writes are XMP sidecars, and only when `folder.writable`.
  */
 export interface PhotoSource {
   readonly folder: FolderInfo;
@@ -35,6 +35,22 @@ export interface PhotoSource {
   /** The photo's XMP sidecar, if there is one. */
   readSidecar(photoPath: string): Promise<{ text: string; lastModified: number } | null>;
   writeSidecar(photoPath: string, text: string): Promise<void>;
+  /**
+   * Move photos (and their sidecars) into the TRASH_DIR subfolder, keeping
+   * their relative paths. Needs write access. Partial success is reported.
+   */
+  moveToTrash(photoPaths: string[]): Promise<FileOpResult<string>>;
+  /** Move trashed photos back to their original paths (all, if none given). */
+  restoreFromTrash(photoPaths?: string[]): Promise<FileOpResult<SourceFile>>;
+  /** Trashed photos, by original path. */
+  listTrash(): Promise<SourceFile[]>;
+  /** Permanently delete the trash folder. Returns how many photos were deleted. */
+  emptyTrash(): Promise<number>;
+}
+
+export interface FileOpResult<T> {
+  done: T[];
+  failed: Array<{ path: string; error: string }>;
 }
 
 /** Opens folders and remembers them between sessions. */
@@ -69,6 +85,13 @@ export interface MetadataStore {
   load(folderId: string): Promise<Map<string, StoredPhotoMeta>>;
   /** Merge fields into each photo's stored record. */
   save(folderId: string, entries: Array<{ path: string } & Partial<StoredPhotoMeta>>): Promise<void>;
+  /** Forget photos (after they are permanently deleted). */
+  remove(folderId: string, paths: string[]): Promise<void>;
+}
+
+/** Lets file operations wait until pending metadata/sidecar writes have finished. */
+export interface PersistenceBarrier {
+  flush(): Promise<void>;
 }
 
 /** Index data read from an image file (EXIF). */
@@ -125,6 +148,7 @@ export interface Services {
   library: LibraryProvider;
   metadata: MetadataStore;
   previews: PreviewService;
+  persistence: PersistenceBarrier;
   ai: AIProvider;
   downloads: DownloadService;
 }

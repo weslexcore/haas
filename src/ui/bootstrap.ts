@@ -33,11 +33,13 @@ export async function createBrowserRuntime(): Promise<Runtime> {
   const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
   const db = new PhotoDB();
   const library = new BrowserLibraryProvider(db);
+  let sync: MetadataSync | null = null;
   const services: Services = {
     settings: new LocalSettingsStore(),
     library,
     metadata: new DexieMetadataStore(db),
     previews: new BrowserPreviewService(library, db),
+    persistence: { flush: () => sync?.flush() ?? Promise.resolve() },
     ai: new StubAIProvider(),
     downloads: new BrowserDownloads(),
   };
@@ -48,11 +50,12 @@ export async function createBrowserRuntime(): Promise<Runtime> {
     services,
   });
 
-  const sync = new MetadataSync(runtime.store, services, { onError: (message) => toast(message, "error", 8000) });
-  sync.start();
+  const metadataSync = new MetadataSync(runtime.store, services, { onError: (message) => toast(message, "error", 8000) });
+  metadataSync.start();
+  sync = metadataSync;
   // Don't lose the last few changes when the tab closes or is backgrounded.
-  window.addEventListener("pagehide", () => void sync.flush());
-  document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && void sync.flush());
+  window.addEventListener("pagehide", () => void metadataSync.flush());
+  document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && void metadataSync.flush());
 
   const { settings } = services;
   const [theme, autoAdvance] = await Promise.all([
@@ -76,7 +79,7 @@ export async function createBrowserRuntime(): Promise<Runtime> {
     transaction: (label, fn, opts) => runtime.dispatcher.transaction(label, fn, { source: "script", ...opts }),
     manifest: () => buildManifest(runtime.registry, runtime.menus),
     state: () => runtime.store.getState(),
-    flushMetadata: () => sync.flush(),
+    flushMetadata: () => metadataSync.flush(),
   };
   return runtime;
 }
