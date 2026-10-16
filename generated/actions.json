@@ -351,6 +351,22 @@
       "availability": "Always available."
     },
     {
+      "id": "app.ai.panel.toggle",
+      "title": "Toggle AI Panel",
+      "description": "Show or hide the AI conversation panel, which keeps every suggestion and what was applied.",
+      "category": "App",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [
+        {
+          "keys": "mod+j"
+        }
+      ],
+      "availability": "Always available."
+    },
+    {
       "id": "app.ai.settings.close",
       "title": "Close AI Settings",
       "description": "Close the AI settings screen.",
@@ -373,6 +389,18 @@
       "examples": [],
       "defaultShortcuts": [],
       "availability": "Always available."
+    },
+    {
+      "id": "app.ai.thread.clear",
+      "title": "New AI Conversation",
+      "description": "Start a new AI conversation for this folder. The previous conversation and its suggestions are discarded.",
+      "category": "App",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [],
+      "availability": "Available only when there is an AI conversation."
     },
     {
       "id": "app.autoAdvance.set",

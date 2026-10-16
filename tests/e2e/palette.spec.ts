@@ -65,7 +65,7 @@ test("? switches to AI mode", async ({ page }) => {
   await expect(options.first()).toContainText("Ask AI");
   await page.keyboard.press("Enter");
   await expect(palette(page)).toBeHidden();
-  await expect(page.getByRole("complementary", { name: "AI plan" })).toContainText("show me only 4+ star photos");
+  await expect(page.getByRole("complementary", { name: "AI conversation" })).toContainText("show me only 4+ star photos");
 });
 
 test("a binding without params opens the palette on the param step", async ({ page }) => {

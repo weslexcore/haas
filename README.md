@@ -17,6 +17,7 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | Keys | Action |
 | --- | --- |
 | `⌘K` / `Ctrl+K` | Command palette (type `?` to ask Claude; set your API key in "AI Settings…") |
+| `⌘J` / `Ctrl+J` | AI conversation panel: every suggestion, what was applied, follow-ups |
 | `⌘/` / `Ctrl+/` | Keyboard Shortcuts: search, rebind, resolve conflicts, import/export |
 | `G` `E` `D` | Grid, Loupe and Develop views |
 | `←` `→` `Home` `End` | Previous, next, first and last photo |

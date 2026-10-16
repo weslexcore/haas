@@ -133,6 +133,14 @@ Examples:
 - `{}`: List all actions.
 - `{"category":"Library","availableOnly":true}`: Library actions usable right now.
 
+#### Toggle AI Panel: `app.ai.panel.toggle`
+
+Command · Shortcuts: `mod+j`
+
+Show or hide the AI conversation panel, which keeps every suggestion and what was applied.
+
+*Always available.*
+
 #### Close AI Settings: `app.ai.settings.close`
 
 Command
@@ -148,6 +156,14 @@ Command
 Open AI settings: the Anthropic API key (stored only in this browser) and which Claude model plans requests.
 
 *Always available.*
+
+#### New AI Conversation: `app.ai.thread.clear`
+
+Command
+
+Start a new AI conversation for this folder. The previous conversation and its suggestions are discarded.
+
+*Available only when there is an AI conversation.*
 
 #### Set Auto-Advance: `app.autoAdvance.set`
 

@@ -3,6 +3,7 @@ import { defineAction } from "../core/actions/types";
 import { contextMenuOpen, hasPhotos, paletteOpen, shortcutsOpen, when } from "../core/actions/when";
 import { buildManifest, paramsJsonSchema, serializeManifest } from "../core/manifest/build-manifest";
 import { reviewPlan } from "../core/ai/plan";
+import { composeMessage, historyMessages, renderReply, turnId, type AiTurn } from "../core/ai/thread";
 import { renderSkillMd } from "../core/manifest/render-skill-md";
 import { contextSummary } from "./context";
 
@@ -263,9 +264,9 @@ export const askAI = defineAction({
   id: "app.ai.ask",
   title: "Ask AI",
   description:
-    "Send a natural-language request to the AI provider with the action manifest and current context. The model " +
-    "may run read-only queries, then returns a plan (ordered actions with reasons) that is checked against each " +
-    "action's schema. Nothing is applied: the user reviews, previews and applies the plan.",
+    "Send a message to the AI in the current conversation, with the action manifest, current context and the " +
+    "status of earlier suggestions. The model may run read-only queries and look at photos, then suggests a plan " +
+    "that is checked against each action's schema and added to the conversation. Nothing is applied.",
   category: "App",
   kind: "command",
   internal: true,
@@ -273,27 +274,148 @@ export const askAI = defineAction({
   examples: [{ params: { prompt: "Show me only 4+ star photos" }, description: "Ask for a plan to filter the library." }],
   async run({ prompt }, ctx) {
     const ai = ctx.services.ai;
-    if (!ai.isConfigured()) throw new Error("Add an Anthropic API key in AI Settings first.");
-    const queries = ctx.registry.all().filter((a) => a.kind === "query" && !a.internal);
-    const plan = await ai.propose({
-      prompt,
-      manifest: buildManifest(ctx.registry, ctx.menus),
-      context: contextSummary(ctx),
-      tools: queries.map((a) => ({
-        actionId: a.id,
-        description: a.description,
-        inputSchema: paramsJsonSchema(a) ?? { type: "object", properties: {} },
-      })),
-      callTool: async (actionId, input) => {
-        const action = ctx.registry.get(actionId);
-        if (!action || action.kind !== "query" || action.internal) throw new Error("Only read-only queries can be used while planning.");
-        const empty = !input || (typeof input === "object" && Object.keys(input).length === 0);
-        const r = await ctx.dispatch(actionId, empty ? undefined : input);
-        if (!r.ok) throw new Error(r.message);
-        return r.value;
-      },
+    const folderId = ctx.state.library.folder?.id;
+    const thread = ctx.state.ai.thread;
+    const context = contextSummary(ctx);
+    const message = composeMessage(prompt, context, thread);
+    ctx.update((s) => {
+      s.ai.thread.push({ id: turnId(), role: "user", text: prompt, sent: message, at: Date.now() });
+      s.ai.panelOpen = true;
     });
-    return { summary: plan.summary, model: ai.model, steps: reviewPlan(ctx.registry, ctx, plan.steps) };
+    const sameFolder = () => ctx.state.library.folder?.id === folderId;
+    if (!ai.isConfigured()) {
+      const text = "Add an Anthropic API key in AI Settings first.";
+      ctx.update((s) => void s.ai.thread.push({ id: turnId(), role: "error", message: text, at: Date.now() }));
+      throw new Error(text);
+    }
+
+    const queries = ctx.registry.all().filter((a) => a.kind === "query" && !a.internal);
+    let plan;
+    try {
+      plan = await ai.propose({
+        prompt,
+        message,
+        history: historyMessages(thread),
+        manifest: buildManifest(ctx.registry, ctx.menus),
+        context,
+        tools: queries.map((a) => ({
+          actionId: a.id,
+          description: a.description,
+          inputSchema: paramsJsonSchema(a) ?? { type: "object", properties: {} },
+        })),
+        callTool: async (actionId, input) => {
+          const action = ctx.registry.get(actionId);
+          if (!action || action.kind !== "query" || action.internal) throw new Error("Only read-only queries can be used while planning.");
+          const empty = !input || (typeof input === "object" && Object.keys(input).length === 0);
+          const r = await ctx.dispatch(actionId, empty ? undefined : input);
+          if (!r.ok) throw new Error(r.message);
+          return r.value;
+        },
+      });
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      if (sameFolder()) ctx.update((s) => void s.ai.thread.push({ id: turnId(), role: "error", message: text, at: Date.now() }));
+      throw error;
+    }
+    const steps = reviewPlan(ctx.registry, ctx, plan.steps);
+    const turn = {
+      id: turnId(),
+      role: "assistant" as const,
+      model: ai.model,
+      summary: plan.summary,
+      steps,
+      reply: renderReply(plan.summary, plan.steps),
+      status: "pending" as const,
+      applied: [],
+      at: Date.now(),
+    };
+    if (sameFolder()) ctx.update((s) => void s.ai.thread.push(turn));
+    return { turnId: turn.id, summary: plan.summary, model: ai.model, steps };
+  },
+});
+
+export const toggleAiPanel = defineAction({
+  id: "app.ai.panel.toggle",
+  title: "Toggle AI Panel",
+  description: "Show or hide the AI conversation panel, which keeps every suggestion and what was applied.",
+  category: "App",
+  kind: "command",
+  defaultShortcuts: [{ keys: "mod+j" }],
+  run(_, ctx) {
+    ctx.update((s) => {
+      s.ai.panelOpen = !s.ai.panelOpen;
+    });
+  },
+});
+
+export const clearAiThread = defineAction({
+  id: "app.ai.thread.clear",
+  title: "New AI Conversation",
+  description: "Start a new AI conversation for this folder. The previous conversation and its suggestions are discarded.",
+  category: "App",
+  kind: "command",
+  when: when("there is an AI conversation", (ctx) => ctx.state.ai.thread.length > 0),
+  run(_, ctx) {
+    ctx.update((s) => {
+      s.ai.thread = [];
+    });
+  },
+});
+
+export const setAiThread = defineAction({
+  id: "app.ai.thread.set",
+  title: "Load AI Conversation",
+  description: "Replace the AI conversation, e.g. with the one saved for a folder when it opens.",
+  category: "App",
+  kind: "command",
+  internal: true,
+  params: z.object({ turns: z.array(z.object({ id: z.string(), role: z.enum(["user", "assistant", "error"]) }).passthrough()).describe("Saved turns.") }),
+  examples: [{ params: { turns: [] }, description: "Empty conversation." }],
+  run({ turns }, ctx) {
+    ctx.update((s) => {
+      s.ai.thread = turns as unknown as AiTurn[];
+    });
+  },
+});
+
+export const markSuggestion = defineAction({
+  id: "app.ai.suggestion.mark",
+  title: "Mark Suggestion Applied",
+  description: "Record which steps of an AI suggestion were applied, with the params used. Runs inside the apply transaction so undo reverts it.",
+  category: "App",
+  kind: "command",
+  internal: true,
+  undoable: true,
+  params: z.object({
+    turnId: z.string().describe("The suggestion's turn id."),
+    applied: z.array(z.object({ index: z.number().int().min(0), params: z.unknown() })).describe("Applied steps."),
+  }),
+  examples: [{ params: { turnId: "t1", applied: [{ index: 0, params: { rating: 3 } }] }, description: "Step 1 applied." }],
+  run({ turnId: id, applied }, ctx) {
+    ctx.update((s) => {
+      const turn = s.ai.thread.find((t) => t.id === id);
+      if (turn?.role !== "assistant") throw new Error("Unknown suggestion.");
+      turn.status = "applied";
+      turn.applied = applied as Array<{ index: number; params: unknown }>;
+    });
+  },
+});
+
+export const dismissSuggestion = defineAction({
+  id: "app.ai.suggestion.dismiss",
+  title: "Dismiss Suggestion",
+  description: "Mark an AI suggestion as dismissed (not wanted). The AI is told in later turns. Undoable.",
+  category: "App",
+  kind: "command",
+  internal: true,
+  undoable: true,
+  params: z.object({ turnId: z.string().describe("The suggestion's turn id.") }),
+  examples: [{ params: { turnId: "t1" }, description: "Dismiss a suggestion." }],
+  run({ turnId: id }, ctx) {
+    ctx.update((s) => {
+      const turn = s.ai.thread.find((t) => t.id === id);
+      if (turn?.role === "assistant" && turn.status === "pending") turn.status = "dismissed";
+    });
   },
 });
 
@@ -362,6 +484,11 @@ export const appActions = [
   listActions,
   exportManifest,
   askAI,
+  toggleAiPanel,
+  clearAiThread,
+  setAiThread,
+  markSuggestion,
+  dismissSuggestion,
   openAiSettings,
   closeAiSettings,
   configureAi,

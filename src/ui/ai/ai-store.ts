@@ -1,59 +1,79 @@
 import { createStore } from "zustand/vanilla";
-import type { ReviewedStep } from "../../core/ai/plan";
+import { reviewStep, type ReviewedStep } from "../../core/ai/plan";
+import type { AiSuggestionTurn } from "../../core/ai/thread";
 import type { Runtime } from "../../core/runtime";
 
-export interface DraftStep extends ReviewedStep {
-  accepted: boolean;
-  /** Params as editable JSON. */
-  paramsText: string;
-  editing: boolean;
+/** Review state for one suggestion card. UI session state, not app state. */
+export interface Draft {
+  steps: ReviewedStep[];
+  accepted: boolean[];
+  paramsText: string[];
+  editing: boolean[];
 }
 
-export interface AiSession {
-  status: "idle" | "thinking" | "review" | "applying" | "error";
-  prompt: string;
-  summary: string;
-  model: string;
-  steps: DraftStep[];
-  error: string | null;
+export interface AiUiState {
+  thinking: boolean;
+  /** The suggestion being reviewed (and previewed). */
+  reviewing: string | null;
+  drafts: Record<string, Draft>;
   preview: boolean;
-  /** Steps whose preview failed (index → message). */
   previewErrors: Record<number, string>;
+  applyError: string | null;
 }
 
-const idle: AiSession = { status: "idle", prompt: "", summary: "", model: "", steps: [], error: null, preview: true, previewErrors: {} };
-
-/** The current AI request and its plan under review. UI session state, not app state. */
-export const aiStore = createStore<AiSession>()(() => idle);
+export const aiStore = createStore<AiUiState>()(() => ({
+  thinking: false,
+  reviewing: null,
+  drafts: {},
+  preview: true,
+  previewErrors: {},
+  applyError: null,
+}));
 
 let requestId = 0;
 
-/** Ask for a plan. Results of a superseded or cancelled request are ignored. */
-export async function askAi(runtime: Runtime, prompt: string): Promise<void> {
-  const id = ++requestId;
-  await runtime.plans.endPreview();
-  aiStore.setState({ ...idle, status: "thinking", prompt });
-  const r = await runtime.dispatch<{ summary: string; model: string; steps: ReviewedStep[] }>("app.ai.ask", { prompt }, { source: "palette" });
-  if (id !== requestId) return;
-  if (!r.ok) {
-    aiStore.setState({ status: "error", error: r.message });
+/** A fresh draft, re-checked against the current state (photos or settings may have changed since). */
+export function newDraft(runtime: Runtime, turn: AiSuggestionTurn): Draft {
+  const ctx = runtime.dispatcher.readonlyContext();
+  const steps = turn.steps.map((s) => reviewStep(runtime.registry, ctx, s));
+  return {
+    steps,
+    accepted: steps.map((s) => s.valid && !s.error),
+    paramsText: steps.map((s) => (s.params === undefined ? "{}" : JSON.stringify(s.params, null, 2))),
+    editing: steps.map(() => false),
+  };
+}
+
+export async function review(runtime: Runtime, turn: AiSuggestionTurn | null): Promise<void> {
+  if (!turn) {
+    await runtime.plans.endPreview();
+    aiStore.setState({ reviewing: null, previewErrors: {}, applyError: null });
     return;
   }
+  const drafts = aiStore.getState().drafts;
   aiStore.setState({
-    status: "review",
-    summary: r.value.summary,
-    model: r.value.model,
-    steps: r.value.steps.map((s) => ({
-      ...s,
-      accepted: s.valid && !s.error,
-      paramsText: s.params === undefined ? "{}" : JSON.stringify(s.params, null, 2),
-      editing: false,
-    })),
+    reviewing: turn.id,
+    drafts: drafts[turn.id] ? drafts : { ...drafts, [turn.id]: newDraft(runtime, turn) },
+    previewErrors: {},
+    applyError: null,
   });
 }
 
-export async function closeAi(runtime: Runtime): Promise<void> {
+/** Send a message in the conversation. The reply appears in the thread; the newest suggestion opens for review. */
+export async function sendToAi(runtime: Runtime, text: string): Promise<void> {
+  const id = ++requestId;
+  await review(runtime, null);
+  if (!runtime.store.getState().ai.panelOpen) await runtime.dispatch("app.ai.panel.toggle", undefined, { source: "ui" });
+  aiStore.setState({ thinking: true });
+  const r = await runtime.dispatch<{ turnId: string }>("app.ai.ask", { prompt: text }, { source: "palette" });
+  if (id !== requestId) return;
+  aiStore.setState({ thinking: false });
+  if (!r.ok) return; // the error is shown in the thread
+  const turn = runtime.store.getState().ai.thread.find((t) => t.id === r.value.turnId);
+  if (turn?.role === "assistant" && turn.steps.length) await review(runtime, turn);
+}
+
+export function cancelThinking(): void {
   requestId++;
-  await runtime.plans.endPreview();
-  aiStore.setState(idle);
+  aiStore.setState({ thinking: false });
 }

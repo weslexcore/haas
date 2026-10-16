@@ -1,4 +1,5 @@
 import type { EditRecipe, SettingsGroup } from "../develop/recipe";
+import type { AiTurn } from "../ai/thread";
 
 export type ViewMode = "grid" | "loupe" | "develop";
 export type ThemePreference = "light" | "dark" | "system";
@@ -114,6 +115,9 @@ export interface AppState {
     /** An AI plan is being previewed: state shows its effects but nothing is persisted or recorded. */
     previewing: boolean;
     settingsOpen: boolean;
+    panelOpen: boolean;
+    /** The conversation with the AI for the open folder. */
+    thread: AiTurn[];
   };
   library: {
     folder: FolderInfo | null;
@@ -149,7 +153,7 @@ export const initialState: AppState = {
   contextMenu: null,
   shortcutsOpen: false,
   develop: { clipboard: null, cropTool: false },
-  ai: { previewing: false, settingsOpen: false },
+  ai: { previewing: false, settingsOpen: false, panelOpen: false, thread: [] },
   library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0 },
   photos: { order: [], byId: {} },
   selection: { activeId: null, ids: [] },

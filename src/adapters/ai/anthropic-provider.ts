@@ -38,7 +38,11 @@ How to plan:
 - When the request depends on what is in the photos (sharpness, blur, faces, eyes closed, subject, composition, colour casts, how an edit looks), look at them with library.photos.view before deciding. Viewing costs tokens: use thumbnail size to scan many photos, detail to check focus, and view only what you need. Base edits on what you see.
 - If the request needs something you can't determine, say so in the summary and plan what you can, or return no steps.
 - Never plan permanent deletion (library.removed.empty) unless the user explicitly asks to delete files permanently. Prefer flagging as rejected to removing photos.
-- Don't pass advance: true unless the user asks to move through photos.`;
+- Don't pass advance: true unless the user asks to move through photos.
+
+Conversation:
+- This may be a follow-up. Your earlier suggestions are in the conversation, and <suggestion_status> says what the user did with each: applied (possibly with edited params), not applied, or dismissed. The app context shows the current state, including applied changes.
+- Build on what was applied. Don't re-propose steps the user dismissed or left unapplied unless they ask again. If they ask to adjust an applied change ("a bit less warm"), propose the new values relative to what was applied.`;
 
 /** The SDK is loaded on first use, keeping it out of the main bundle. */
 const loadSdk = async () => {
@@ -133,12 +137,18 @@ export class AnthropicProvider implements AIProvider {
       { type: "text", text: INSTRUCTIONS },
       { type: "text", text: `<action_manifest>\n${JSON.stringify(req.manifest)}\n</action_manifest>`, cache_control: { type: "ephemeral" } },
     ];
-    const messages: Anthropic.Beta.BetaMessageParam[] = [
-      {
-        role: "user",
-        content: `<app_context>\n${JSON.stringify(req.context, null, 2)}\n</app_context>\n\n<request>\n${req.prompt}\n</request>`,
-      },
-    ];
+    // Earlier turns verbatim (cache breakpoint on the last one), then this turn's message.
+    const messages: Anthropic.Beta.BetaMessageParam[] = req.history.map((m, i) => ({
+      role: m.role,
+      content: [
+        {
+          type: "text" as const,
+          text: m.text,
+          ...(i === req.history.length - 1 ? { cache_control: { type: "ephemeral" as const } } : {}),
+        },
+      ],
+    }));
+    messages.push({ role: "user", content: req.message });
 
     try {
       for (let turn = 0; turn < MAX_TURNS; turn++) {

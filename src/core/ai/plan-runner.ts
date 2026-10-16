@@ -73,7 +73,11 @@ export class PlanRunner {
     return result;
   }
 
-  async apply(steps: PlanStepToRun[], label: string): Promise<void> {
+  /**
+   * `suggestion` (an AI conversation turn) is marked applied inside the same
+   * transaction, so undo reverts the edits and the record together.
+   */
+  async apply(steps: PlanStepToRun[], label: string, suggestion?: { turnId: string; indexes: number[] }): Promise<void> {
     await this.endPreview();
     await this.dispatcher.transaction(
       `AI: ${label}`,
@@ -81,6 +85,11 @@ export class PlanRunner {
         for (const [i, step] of steps.entries()) {
           const r = await d.dispatch(step.actionId, step.params, { source: "ai" });
           if (!r.ok) throw new Error(`Step ${i + 1} (${this.registry.get(step.actionId)?.title ?? step.actionId}) failed: ${r.message}`);
+        }
+        if (suggestion) {
+          const applied = steps.map((s, i) => ({ index: suggestion.indexes[i]!, params: s.params }));
+          const r = await d.dispatch("app.ai.suggestion.mark", { turnId: suggestion.turnId, applied }, { source: "ai" });
+          if (!r.ok) throw new Error(r.message);
         }
       },
       { source: "ai" },

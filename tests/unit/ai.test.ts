@@ -110,6 +110,88 @@ describe("seeing photos", () => {
   });
 });
 
+describe("conversation", () => {
+  const plans: Plan[] = [
+    {
+      summary: "Rate and warm up.",
+      steps: [
+        { actionId: "library.rating.set", params: { rating: 4 }, reason: "good" },
+        { actionId: "develop.adjust", params: { setting: "temperature", value: 30 }, reason: "warmer" },
+        { actionId: "library.flag.set", params: { flag: "pick" }, reason: "keep" },
+      ],
+    },
+    { summary: "Less warm.", steps: [{ actionId: "develop.adjust", params: { setting: "temperature", value: 15 }, reason: "softer" }] },
+    { summary: "Done.", steps: [] },
+  ];
+
+  it("keeps every suggestion and replays the conversation with what was applied", async () => {
+    let n = 0;
+    const { rt, ai } = await runtimeWithAi(async () => plans[n++]!);
+    const first = await rt.dispatch<{ turnId: string }>("app.ai.ask", { prompt: "make it nicer" });
+    if (!first.ok) throw new Error(first.message);
+    const thread = () => rt.store.getState().ai.thread;
+    expect(thread().map((t) => t.role)).toEqual(["user", "assistant"]);
+    expect(rt.store.getState().ai.panelOpen).toBe(true);
+
+    // Apply steps 1 and 2 only, with step 2 edited to 25.
+    await rt.plans.apply(
+      [
+        { actionId: "library.rating.set", params: { rating: 4 } },
+        { actionId: "develop.adjust", params: { setting: "temperature", value: 25 } },
+      ],
+      "Rate and warm up.",
+      { turnId: first.value.turnId, indexes: [0, 1] },
+    );
+    expect(thread()[1]).toMatchObject({ status: "applied", applied: [{ index: 0 }, { index: 1, params: { setting: "temperature", value: 25 } }] });
+
+    await rt.dispatch("app.ai.ask", { prompt: "a bit less warm" });
+    const second = ai.requests[1]!;
+    // The earlier exchange is replayed verbatim, and the status says what happened.
+    expect(second.history).toHaveLength(2);
+    expect(second.history[0]!.text).toBe(ai.requests[0]!.message);
+    expect(JSON.parse(second.history[1]!.text)).toMatchObject({ summary: "Rate and warm up." });
+    expect(second.message).toContain("<suggestion_status>");
+    expect(second.message).toContain("applied steps 1, 2");
+    expect(second.message).toContain("not applied: steps 3");
+    expect(second.message).toContain('step 2 was edited by the user and applied with params {"setting":"temperature","value":25}');
+    expect(second.message).toContain('"photoCount": 10'); // fresh context every turn
+
+    // Dismiss the second suggestion; undoing the first apply reverts its status too.
+    const secondTurn = thread()[3]!;
+    await rt.dispatch("app.ai.suggestion.dismiss", { turnId: secondTurn.id });
+    await rt.dispatch("history.undo"); // the dismissal
+    expect(thread()[3]).toMatchObject({ status: "pending" });
+    await rt.dispatch("app.ai.suggestion.dismiss", { turnId: secondTurn.id });
+    await rt.dispatch("history.undo");
+    await rt.dispatch("history.undo"); // the applied plan
+    expect(thread()[1]).toMatchObject({ status: "pending", applied: [] });
+    expect(photo(rt).rating).toBe(0);
+
+    await rt.dispatch("app.ai.ask", { prompt: "thanks" });
+    const third = ai.requests[2]!.message;
+    expect(third).toContain('Suggestion 1 ("Rate and warm up."): not applied');
+    expect(ai.requests[2]!.history).toHaveLength(4);
+  });
+
+  it("failed turns are shown but not replayed", async () => {
+    const { rt, ai } = await runtimeWithAi(async () => {
+      throw new Error("network down");
+    });
+    await rt.dispatch("app.ai.ask", { prompt: "hello" });
+    expect(rt.store.getState().ai.thread.map((t) => t.role)).toEqual(["user", "error"]);
+    ai.requests.length = 0;
+    await rt.dispatch("app.ai.ask", { prompt: "again" });
+    expect(ai.requests[0]!.history).toEqual([]);
+  });
+
+  it("can start over", async () => {
+    const { rt } = await runtimeWithAi();
+    await rt.dispatch("app.ai.ask", { prompt: "hi" });
+    await rt.dispatch("app.ai.thread.clear");
+    expect(rt.store.getState().ai.thread).toEqual([]);
+  });
+});
+
 describe("plan preview and apply", () => {
   const steps = [
     { actionId: "library.rating.set", params: { rating: 5 } },
@@ -213,6 +295,8 @@ describe("AnthropicProvider", () => {
     const toolCalls: unknown[] = [];
     const result = await provider.propose({
       prompt: "pick my 4 star photos",
+      message: "<request>pick my 4 star photos</request>",
+      history: [],
       manifest: { actions: [] },
       context: { photoCount: 1 },
       tools: [{ actionId: "library.photos.list", description: "List photos", inputSchema: { type: "object", properties: { minRating: { type: "integer" } } } }],
@@ -244,6 +328,8 @@ describe("AnthropicProvider", () => {
     await provider.configure({ apiKey: "sk-ant-x" });
     await provider.propose({
       prompt: "check focus",
+      message: "check focus",
+      history: [],
       manifest: {},
       context: {},
       tools: [{ actionId: "library.photos.view", description: "View", inputSchema: { type: "object", properties: {} } }],
@@ -256,16 +342,38 @@ describe("AnthropicProvider", () => {
     expect(result.content![1]).toEqual({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "QUJD" } });
   });
 
+  it("replays earlier turns with a cache breakpoint on the last one", async () => {
+    const { fetchImpl, calls } = mockFetch([message([{ type: "text", text: JSON.stringify({ summary: "ok", steps: [] }) }], "end_turn")]);
+    const provider = new AnthropicProvider(new MemorySettingsStore(), fetchImpl);
+    await provider.configure({ apiKey: "sk-ant-x" });
+    await provider.propose({
+      prompt: "less warm",
+      message: "<request>less warm</request>",
+      history: [
+        { role: "user", text: "first message" },
+        { role: "assistant", text: '{"summary":"warm","steps":[]}' },
+      ],
+      manifest: {},
+      context: {},
+      tools: [],
+      callTool: async () => null,
+    });
+    const msgs = calls[0]!.body.messages as Array<{ role: string; content: unknown }>;
+    expect(msgs.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(msgs[1]!.content).toEqual([{ type: "text", text: '{"summary":"warm","steps":[]}', cache_control: { type: "ephemeral" } }]);
+    expect(msgs[2]!.content).toBe("<request>less warm</request>");
+  });
+
   it("reports refusals and never echoes the key in errors", async () => {
     const { fetchImpl } = mockFetch([message([], "refusal")]);
     const provider = new AnthropicProvider(new MemorySettingsStore(), fetchImpl);
     await provider.configure({ apiKey: "sk-ant-secret" });
-    await expect(provider.propose({ prompt: "x", manifest: {}, context: {}, tools: [], callTool: async () => null })).rejects.toThrow(/declined/);
+    await expect(provider.propose({ prompt: "x", message: "x", history: [], manifest: {}, context: {}, tools: [], callTool: async () => null })).rejects.toThrow(/declined/);
 
     const failing = (async () => new Response(JSON.stringify({ type: "error", error: { type: "authentication_error", message: "invalid x-api-key sk-ant-secret" } }), { status: 401, headers: { "content-type": "application/json" } })) as typeof fetch;
     const p2 = new AnthropicProvider(new MemorySettingsStore(), failing);
     await p2.configure({ apiKey: "sk-ant-secret" });
-    const err = await p2.propose({ prompt: "x", manifest: {}, context: {}, tools: [], callTool: async () => null }).catch((e: Error) => e.message);
+    const err = await p2.propose({ prompt: "x", message: "x", history: [], manifest: {}, context: {}, tools: [], callTool: async () => null }).catch((e: Error) => e.message);
     expect(err).toMatch(/rejected/);
     expect(err).not.toContain("sk-ant-secret");
   });
