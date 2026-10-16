@@ -1,0 +1,105 @@
+/*
+ * Design tokens. Components use only these semantic variables, never raw
+ * colours, so a theme is one block below. Runtime themes (user-defined or
+ * AI-generated) can override any variable on :root.
+ */
+
+:root {
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --duration-fast: 90ms;
+  --duration-med: 160ms;
+
+  --z-overlay: 100;
+  --z-menu: 150;
+  --z-toast: 200;
+
+  /* Colour labels: the same in both themes so they read as the label, not UI. */
+  --label-red: #e5484d;
+  --label-yellow: #f5c542;
+  --label-green: #46a758;
+  --label-blue: #3e7bfa;
+  --label-purple: #8e4ec6;
+}
+
+/* Dark is the default: photo apps are viewed against neutral dark surroundings. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-app: #16181d;
+  --surface-panel: #1c1f25;
+  --surface-raised: #252932;
+  --surface-hover: #2c313b;
+  --surface-sunken: #111317;
+  --surface-scrim: rgb(8 9 12 / 0.6);
+
+  --border-subtle: #2a2e37;
+  --border-strong: #3a404c;
+
+  --text-primary: #e8eaee;
+  --text-secondary: #a9afba;
+  --text-muted: #727a88;
+
+  --accent: #e8b34b;
+  --accent-hover: #f0c266;
+  --accent-soft: rgb(232 179 75 / 0.16);
+  --on-accent: #1b1405;
+  --focus-ring: #7fb2ff;
+
+  --danger: #ef6b6b;
+  --success: #5cc48a;
+  --flag-pick: #e8eaee;
+  --flag-reject: #ef6b6b;
+  --star: #e8b34b;
+
+  --shadow-overlay: 0 16px 48px rgb(0 0 0 / 0.5), 0 0 0 1px var(--border-strong);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --surface-app: #eceef1;
+  --surface-panel: #f7f8fa;
+  --surface-raised: #ffffff;
+  --surface-hover: #e3e6eb;
+  --surface-sunken: #dfe2e7;
+  --surface-scrim: rgb(30 34 42 / 0.35);
+
+  --border-subtle: #d8dce2;
+  --border-strong: #bfc5ce;
+
+  --text-primary: #1b1e24;
+  --text-secondary: #4b525e;
+  --text-muted: #7a828f;
+
+  --accent: #b47a10;
+  --accent-hover: #9a680c;
+  --accent-soft: rgb(180 122 16 / 0.14);
+  --on-accent: #ffffff;
+  --focus-ring: #2f6fe0;
+
+  --danger: #c93c3c;
+  --success: #24894f;
+  --flag-pick: #1b1e24;
+  --flag-reject: #c93c3c;
+  --star: #b47a10;
+
+  --shadow-overlay: 0 16px 48px rgb(20 24 32 / 0.18), 0 0 0 1px var(--border-strong);
+}

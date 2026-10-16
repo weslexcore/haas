@@ -1,0 +1,77 @@
+.strip {
+  height: 96px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--surface-panel);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.canvas {
+  position: relative;
+  height: 100%;
+}
+
+.item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  padding: 6px 3px;
+}
+
+.button {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+.button:hover {
+  background: var(--surface-hover);
+}
+
+.selected {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+}
+
+.active {
+  border-color: var(--accent);
+}
+
+.thumb {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.rejected {
+  opacity: 0.35;
+}
+
+.marks {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  background: rgb(0 0 0 / 0.45);
+  color: #fff;
+  font-size: var(--text-xs);
+}
+
+.marks:empty {
+  display: none;
+}
+
+.rating {
+  color: var(--label-yellow);
+}

@@ -1,0 +1,5 @@
+.combo {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
