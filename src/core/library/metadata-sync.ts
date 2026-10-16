@@ -75,9 +75,11 @@ export class MetadataSync {
     }
 
     const source = this.services.library.current();
-    if (!source?.folder.canWriteSidecars || source.folder.id !== folderId) return;
+    if (!source?.folder.writable || source.folder.id !== folderId) return;
     const failures: string[] = [];
     for (const p of photos) {
+      // Moved to the trash (or otherwise gone) since it was queued: its sidecar moved with it.
+      if (!this.store.getState().photos.byId[p.id]) continue;
       try {
         const existing = await source.readSidecar(p.id);
         await source.writeSidecar(p.id, writeXmp(existing?.text ?? null, p));

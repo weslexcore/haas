@@ -61,6 +61,10 @@ export class DexieMetadataStore implements MetadataStore {
       await this.db.metadata.bulkPut(entries.map((e, i) => ({ ...existing[i], ...e, folderId })));
     });
   }
+
+  async remove(folderId: string, paths: string[]): Promise<void> {
+    await this.db.metadata.bulkDelete(paths.map((p) => [folderId, p] as [string, string]));
+  }
 }
 
 /** For tests and environments without IndexedDB. */
@@ -77,5 +81,9 @@ export class MemoryMetadataStore implements MetadataStore {
       folder.set(path, { rating: 0, flag: "none", colorLabel: "none", savedAt: 0, ...folder.get(path), ...meta });
     }
     this.data.set(folderId, folder);
+  }
+
+  async remove(folderId: string, paths: string[]): Promise<void> {
+    for (const p of paths) this.data.get(folderId)?.delete(p);
   }
 }

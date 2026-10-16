@@ -1,0 +1,122 @@
+// @vitest-environment jsdom
+import { describe, expect, it } from "vitest";
+import { MemorySource } from "../../src/adapters/memory-source";
+import { paramsJsonSchema } from "../../src/core/manifest/build-manifest";
+import { writeXmp } from "../../src/core/xmp/xmp";
+import { requiresParams } from "../../src/core/actions/dispatcher";
+import { shouldAskForParams } from "../../src/ui/palette/schema-form";
+import { createTestRuntime } from "./helpers";
+
+async function openShoot(writable = true) {
+  const rt = await createTestRuntime({ loadSample: false });
+  const source = new MemorySource({ id: "f1", name: "Shoot", kind: "memory", writable }, {
+    "IMG_1.jpg": "1",
+    "IMG_2.jpg": "22",
+    "sub/IMG_3.jpg": "333",
+    "IMG_4.jpg": "4444",
+    "IMG_2.xmp": writeXmp(null, { rating: 2, flag: "reject", colorLabel: "none" }),
+  });
+  rt.library.nextPick = source;
+  await rt.dispatch("library.folder.open");
+  return { rt, source };
+}
+
+const ids = (rt: Awaited<ReturnType<typeof createTestRuntime>>) => rt.store.getState().photos.order;
+
+describe("removing rejected photos", () => {
+  it("moves rejected photos and their sidecars into _Rejected, and drops them from the library", async () => {
+    const { rt, source } = await openShoot();
+    await rt.dispatch("library.flag.set", { flag: "reject", photoIds: ["sub/IMG_3.jpg"] });
+    await rt.dispatch("library.selection.set", { ids: ["IMG_2.jpg"] });
+
+    const r = await rt.dispatch("library.rejected.remove");
+    expect(r).toMatchObject({ ok: true, value: { removed: 2, failed: [] } });
+    expect(ids(rt)).toEqual(["IMG_1.jpg", "IMG_4.jpg"]);
+    expect(source.files.has("_Rejected/IMG_2.jpg")).toBe(true);
+    expect(source.files.has("_Rejected/IMG_2.xmp")).toBe(true);
+    expect(source.files.has("_Rejected/sub/IMG_3.jpg")).toBe(true);
+    expect(source.files.has("IMG_2.jpg")).toBe(false);
+    expect(rt.store.getState().library.removedCount).toBe(2);
+    // Lands on the next remaining photo.
+    expect(rt.store.getState().selection.activeId).toBe("IMG_4.jpg");
+  });
+
+  it("is only available with write access and when something is rejected", async () => {
+    const { rt } = await openShoot();
+    await rt.dispatch("library.flag.set", { flag: "none", photoIds: ["IMG_2.jpg"] });
+    expect(rt.dispatcher.isAvailable("library.rejected.remove")).toBe(false);
+
+    const ro = await openShoot(false);
+    expect(ro.rt.dispatcher.isAvailable("library.rejected.remove")).toBe(false);
+    expect(await ro.rt.dispatch("library.rejected.remove")).toMatchObject({ ok: false, error: "unavailable" });
+  });
+
+  it("refuses photos that aren't rejected", async () => {
+    const { rt, source } = await openShoot();
+    const r = await rt.dispatch("library.rejected.remove", { photoIds: ["IMG_1.jpg"] });
+    expect(r).toMatchObject({ ok: false, error: "failed" });
+    expect(source.files.has("IMG_1.jpg")).toBe(true);
+  });
+
+  it("counts existing _Rejected contents on load, and never lists them as photos", async () => {
+    const { rt, source } = await openShoot();
+    await rt.dispatch("library.rejected.remove");
+    rt.library.nextPick = source;
+    await rt.dispatch("library.folder.open");
+    expect(ids(rt)).not.toContain("IMG_2.jpg");
+    expect(rt.store.getState().library.removedCount).toBe(1);
+    expect(await rt.dispatch("library.removed.list")).toMatchObject({ ok: true, value: [{ path: "IMG_2.jpg" }] });
+  });
+});
+
+describe("restoring and emptying", () => {
+  it("restores photos with their sidecars and ratings", async () => {
+    const { rt, source } = await openShoot();
+    await rt.dispatch("library.rejected.remove");
+    const r = await rt.dispatch("library.removed.restore");
+    expect(r).toMatchObject({ ok: true, value: { restored: 1 } });
+    expect(ids(rt)).toEqual(["IMG_1.jpg", "IMG_2.jpg", "IMG_4.jpg", "sub/IMG_3.jpg"]);
+    expect(rt.store.getState().photos.byId["IMG_2.jpg"]).toMatchObject({ rating: 2, flag: "reject" });
+    expect(source.files.has("IMG_2.xmp")).toBe(true);
+    expect(rt.store.getState().library.removedCount).toBe(0);
+  });
+
+  it("won't overwrite a file that reappeared at the original path", async () => {
+    const { rt, source } = await openShoot();
+    await rt.dispatch("library.rejected.remove");
+    source.files.set("IMG_2.jpg", { data: new Blob(["new"]), lastModified: 1 });
+    const r = await rt.dispatch<{ restored: number; failed: unknown[] }>("library.removed.restore");
+    expect(r).toMatchObject({ ok: true, value: { restored: 0 } });
+    if (r.ok) expect(r.value.failed).toHaveLength(1);
+    expect(await source.files.get("IMG_2.jpg")!.data.text()).toBe("new");
+  });
+
+  it("permanently deletes only with confirm: true", async () => {
+    const { rt, source } = await openShoot();
+    await rt.dispatch("library.rejected.remove");
+    expect(await rt.dispatch("library.removed.empty", {})).toMatchObject({ ok: false, error: "invalid_params" });
+    expect(await rt.dispatch("library.removed.empty", { confirm: false })).toMatchObject({ ok: false, error: "invalid_params" });
+    expect(source.files.has("_Rejected/IMG_2.jpg")).toBe(true);
+
+    expect(await rt.dispatch("library.removed.empty", { confirm: true })).toMatchObject({ ok: true, value: { deleted: 1 } });
+    expect([...source.files.keys()].some((k) => k.startsWith("_Rejected/"))).toBe(false);
+    expect(rt.store.getState().library.removedCount).toBe(0);
+    expect((await rt.services.metadata.load("f1")).has("IMG_2.jpg")).toBe(false);
+  });
+});
+
+describe("palette parameter step", () => {
+  it("runs id-list-only actions directly, but asks for real choices and confirmations", async () => {
+    const rt = await createTestRuntime();
+    const ask = (id: string) => {
+      const a = rt.registry.get(id)!;
+      return shouldAskForParams(paramsJsonSchema(a), !requiresParams(a));
+    };
+    expect(ask("library.rejected.remove")).toBe(false);
+    expect(ask("library.removed.restore")).toBe(false);
+    expect(ask("library.removed.empty")).toBe(true);
+    expect(ask("library.rating.set")).toBe(true);
+    expect(ask("app.shortcuts.reset")).toBe(true);
+    expect(ask("navigation.next")).toBe(false);
+  });
+});

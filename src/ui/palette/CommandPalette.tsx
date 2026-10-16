@@ -7,6 +7,8 @@ import { Kbd } from "../shell/Kbd";
 import { Modal } from "../shell/Modal";
 import { toast } from "../toasts";
 import { ParamForm } from "./ParamForm";
+import { paramsJsonSchema } from "../../core/manifest/build-manifest";
+import { shouldAskForParams } from "./schema-form";
 import { getRecents, pushRecent } from "./recents";
 import { AI_PREFIX, buildRows, searchRows, type ActionRow, type PaletteRow } from "./rows";
 import styles from "./CommandPalette.module.css";
@@ -70,8 +72,9 @@ function PaletteDialog({ initialActionId }: { initialActionId: string | null }) 
   function choose(row: PaletteRow | undefined) {
     if (!row) return;
     if (row.kind === "ai") void askAI(row.prompt);
-    else if (!row.hasFixedParams && row.action.params) setStep({ kind: "params", row });
-    else void run(row, row.params);
+    else if (!row.hasFixedParams && shouldAskForParams(paramsJsonSchema(row.action), !requiresParams(row.action))) {
+      setStep({ kind: "params", row });
+    } else void run(row, row.params);
   }
 
   function onEscape() {

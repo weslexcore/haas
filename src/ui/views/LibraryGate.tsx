@@ -8,6 +8,7 @@ import styles from "./LibraryGate.module.css";
 export function LibraryGate({ children }: { children: ReactNode }) {
   const status = useAppState((s) => s.library.status);
   const count = useAppState((s) => s.photos.order.length);
+  const removed = useAppState((s) => s.library.removedCount);
   const openShortcut = useShortcut("library.folder.open");
 
   if (count > 0) return <>{children}</>;
@@ -50,6 +51,11 @@ export function LibraryGate({ children }: { children: ReactNode }) {
           <p className={styles.error} role="alert">
             {status.message}
           </p>
+          {removed > 0 && (
+            <ActionButton actionId="library.removed.restore" className={styles.secondary}>
+              Restore {removed} Removed Photo{removed === 1 ? "" : "s"}
+            </ActionButton>
+          )}
           {openButtons}
         </>
       );

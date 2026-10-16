@@ -8,7 +8,7 @@ import { parseXmp, writeXmp } from "../../src/core/xmp/xmp";
 import { buildRows } from "../../src/ui/palette/rows";
 import { FakePreviews, createTestRuntime, settle } from "./helpers";
 
-const folder = (canWriteSidecars = true): FolderInfo => ({ id: "f1", name: "Shoot", kind: "memory", canWriteSidecars });
+const folder = (writable = true): FolderInfo => ({ id: "f1", name: "Shoot", kind: "memory", writable });
 
 function shoot(canWrite = true) {
   return new MemorySource(folder(canWrite), {

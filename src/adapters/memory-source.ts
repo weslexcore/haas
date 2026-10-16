@@ -1,5 +1,5 @@
-import { imageMimeType, sidecarCandidates } from "../core/library/formats";
-import type { PhotoSource, SourceFile } from "../core/services";
+import { TRASH_DIR, imageMimeType, sidecarCandidates, trashPath } from "../core/library/formats";
+import type { FileOpResult, PhotoSource, SourceFile } from "../core/services";
 import type { FolderInfo } from "../core/state/types";
 
 export interface MemoryFile {
@@ -22,14 +22,18 @@ export class MemorySource implements PhotoSource {
   }
 
   async listFiles(): Promise<SourceFile[]> {
+    return this.list((path) => !path.startsWith(`${TRASH_DIR}/`));
+  }
+
+  private list(include: (path: string) => boolean, rename: (path: string) => string = (p) => p): SourceFile[] {
     return [...this.files]
-      .filter(([path]) => imageMimeType(path))
-      .map(([path, f]) => ({
-        path,
-        name: path.slice(path.lastIndexOf("/") + 1),
+      .filter(([path]) => imageMimeType(path) && include(path))
+      .map(([full, f]) => ({
+        path: rename(full),
+        name: full.slice(full.lastIndexOf("/") + 1),
         size: f.data.size,
         lastModified: f.lastModified,
-        mimeType: imageMimeType(path)!,
+        mimeType: imageMimeType(full)!,
       }))
       .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
   }
@@ -52,9 +56,61 @@ export class MemorySource implements PhotoSource {
   }
 
   async writeSidecar(photoPath: string, text: string): Promise<void> {
-    if (!this.folder.canWriteSidecars) throw new Error("Read-only folder.");
+    if (!this.folder.writable) throw new Error("Read-only folder.");
     const path = this.sidecarPath(photoPath) ?? sidecarCandidates(photoPath)[0]!;
     this.files.set(path, { data: new Blob([text]), lastModified: Date.now() });
     this.writes++;
+  }
+
+  private move(from: string, to: string): void {
+    if (this.files.has(to)) throw new Error(`${to} already exists`);
+    this.files.set(to, this.files.get(from)!);
+    this.files.delete(from);
+  }
+
+  async moveToTrash(photoPaths: string[]): Promise<FileOpResult<string>> {
+    if (!this.folder.writable) throw new Error("Read-only folder.");
+    const result: FileOpResult<string> = { done: [], failed: [] };
+    for (const path of photoPaths) {
+      try {
+        if (!this.files.has(path)) throw new Error("Not in this folder");
+        const sidecar = this.sidecarPath(path);
+        this.move(path, trashPath(path));
+        if (sidecar) this.move(sidecar, trashPath(sidecar));
+        result.done.push(path);
+      } catch (e) {
+        result.failed.push({ path, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    return result;
+  }
+
+  async restoreFromTrash(photoPaths?: string[]): Promise<FileOpResult<SourceFile>> {
+    if (!this.folder.writable) throw new Error("Read-only folder.");
+    const trashed = await this.listTrash();
+    const result: FileOpResult<SourceFile> = { done: [], failed: [] };
+    for (const file of trashed) {
+      if (photoPaths && !photoPaths.includes(file.path)) continue;
+      try {
+        this.move(trashPath(file.path), file.path);
+        for (const c of sidecarCandidates(file.path)) if (this.files.has(trashPath(c))) this.move(trashPath(c), c);
+        result.done.push(file);
+      } catch (e) {
+        result.failed.push({ path: file.path, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    return result;
+  }
+
+  async listTrash(): Promise<SourceFile[]> {
+    const prefix = `${TRASH_DIR}/`;
+    return this.list((p) => p.startsWith(prefix), (p) => p.slice(prefix.length));
+  }
+
+  async emptyTrash(): Promise<number> {
+    if (!this.folder.writable) throw new Error("Read-only folder.");
+    const count = (await this.listTrash()).length;
+    for (const path of [...this.files.keys()]) if (path.startsWith(`${TRASH_DIR}/`)) this.files.delete(path);
+    return count;
   }
 }

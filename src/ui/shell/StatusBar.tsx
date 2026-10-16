@@ -25,9 +25,9 @@ export function StatusBar() {
   return (
     <footer className={styles.bar}>
       {folder && (
-        <span className={styles.folder} title={folder.canWriteSidecars ? "XMP sidecars are written to this folder" : "Ratings are saved in the app only"}>
+        <span className={styles.folder} title={folder.writable ? "XMP sidecars are written to this folder" : "Ratings are saved in the app only"}>
           {folder.name}
-          {folder.kind !== "sample" && !folder.canWriteSidecars && " (read-only)"}
+          {folder.kind !== "sample" && !folder.writable && " (read-only)"}
         </span>
       )}
       {count > 0 && (

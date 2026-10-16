@@ -43,8 +43,8 @@ export interface FolderInfo {
   id: string;
   name: string;
   kind: "fs-access" | "file-list" | "sample" | "memory";
-  /** Whether XMP sidecars can be written next to the photos. */
-  canWriteSidecars: boolean;
+  /** Opened with write access: XMP sidecars can be written and photos moved to the _Rejected folder. */
+  writable: boolean;
 }
 
 export type LibraryStatus =
@@ -103,6 +103,8 @@ export interface AppState {
     status: LibraryStatus;
     filter: LibraryFilter;
     sort: LibrarySort;
+    /** Photos moved to the folder's _Rejected subfolder (restorable until it is emptied). */
+    removedCount: number;
   };
   photos: {
     /** Load order (by path). Display order comes from selectVisibleIds(). */
@@ -129,7 +131,7 @@ export const initialState: AppState = {
   palette: { open: false, actionId: null },
   contextMenu: null,
   shortcutsOpen: false,
-  library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort },
+  library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0 },
   photos: { order: [], byId: {} },
   selection: { activeId: null, ids: [] },
 };
