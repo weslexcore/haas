@@ -65,6 +65,10 @@ export class FileListSource implements PhotoSource {
   async emptyTrash(): Promise<number> {
     throw new Error(READ_ONLY);
   }
+
+  async writeExport(): Promise<string> {
+    throw new Error(READ_ONLY);
+  }
 }
 
 /** Show a file picker for a folder (or files, where folders aren't supported). Null if cancelled. */

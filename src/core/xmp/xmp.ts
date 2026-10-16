@@ -1,3 +1,4 @@
+import { recipeSchema, type EditRecipe } from "../develop/recipe";
 import type { ColorLabel, Flag } from "../state/types";
 
 /**
@@ -10,6 +11,8 @@ import type { ColorLabel, Flag } from "../state/types";
  *  - xmp:Label "Red" | "Yellow" | "Green" | "Blue" | "Purple" (Adobe).
  *  - photo:Rating / photo:Flag keep the exact values (so a rejected photo
  *    keeps its stars, and picks survive), in this app's own namespace.
+ *  - photo:Edit holds the develop recipe as JSON, so edits travel with the
+ *    folder. (Other apps ignore it; Lightroom's crs: settings aren't mapped.)
  *
  * Uses DOMParser/XMLSerializer, referenced only inside functions so core
  * stays importable in Node.
@@ -27,6 +30,8 @@ export interface XmpCulling {
   rating: number;
   flag: Flag;
   colorLabel: ColorLabel;
+  /** Develop recipe; undefined/null removes it. */
+  edit?: EditRecipe | null;
 }
 
 export class XmpError extends Error {}
@@ -111,6 +116,16 @@ export function parseXmp(text: string): Partial<XmpCulling> {
     const found = (Object.keys(LABELS) as Array<keyof typeof LABELS>).find((k) => k === label.trim().toLowerCase());
     out.colorLabel = found ?? "none";
   }
+
+  const edit = readProp(doc, NS.photo, "Edit");
+  if (edit !== null) {
+    try {
+      const parsed = recipeSchema.safeParse(JSON.parse(edit));
+      if (parsed.success) out.edit = parsed.data;
+    } catch {
+      // Malformed recipe: ignore it rather than lose the photo's other metadata.
+    }
+  }
   return out;
 }
 
@@ -121,6 +136,7 @@ export function writeXmp(existing: string | null, fields: XmpCulling): string {
   writeProp(doc, "xmp", "Label", fields.colorLabel === "none" ? null : LABELS[fields.colorLabel]);
   writeProp(doc, "photo", "Rating", String(fields.rating));
   writeProp(doc, "photo", "Flag", fields.flag);
+  writeProp(doc, "photo", "Edit", fields.edit ? JSON.stringify(fields.edit) : null);
   const xml = new XMLSerializer().serializeToString(doc);
   return xml.endsWith("\n") ? xml : xml + "\n";
 }

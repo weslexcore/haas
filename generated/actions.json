@@ -58,7 +58,7 @@
     },
     {
       "term": "Edit recipes",
-      "explanation": "Non-destructive develop settings stored per photo as JSON (exposure, contrast, white balance, …) and rendered on the GPU. (Arrive in Phase 3.)"
+      "explanation": "Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a tone curve, HSL per colour band, and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited."
     },
     {
       "term": "Undo and transactions",
@@ -66,6 +66,59 @@
     }
   ],
   "workflows": [
+    {
+      "title": "Give the selected photos a warm film look",
+      "goal": "Warm, slightly faded, less saturated, as one undoable step.",
+      "steps": [
+        {
+          "actionId": "develop.settings.apply",
+          "params": {
+            "settings": {
+              "temperature": 20,
+              "contrast": -10,
+              "saturation": -20,
+              "toneCurve": [
+                [
+                  0,
+                  0.06
+                ],
+                [
+                  0.5,
+                  0.52
+                ],
+                [
+                  1,
+                  0.94
+                ]
+              ]
+            }
+          },
+          "note": "Applies to every selected photo."
+        }
+      ]
+    },
+    {
+      "title": "Edit one photo, then match the rest",
+      "goal": "Develop the active photo and copy its look to the other selected photos.",
+      "steps": [
+        {
+          "actionId": "develop.adjust",
+          "params": {
+            "setting": "exposure",
+            "value": 0.5
+          },
+          "note": "Adjust the active photo (select just it first)."
+        },
+        {
+          "actionId": "library.selection.all",
+          "note": "Select the photos to match."
+        },
+        {
+          "actionId": "develop.settings.sync",
+          "note": "Copies everything except crop from the active photo."
+        }
+      ]
+    },
     {
       "title": "Cull a shoot",
       "goal": "Go through every photo once, picking keepers and rejecting the rest.",
@@ -171,6 +224,32 @@
             ]
           },
           "note": "Select the matches by id."
+        }
+      ]
+    },
+    {
+      "title": "Warm up and brighten the selection",
+      "goal": "Apply a warmer white balance and a little more exposure to every selected photo.",
+      "steps": [
+        {
+          "actionId": "library.selection.get",
+          "note": "Check which photos are selected."
+        },
+        {
+          "actionId": "develop.adjust",
+          "params": {
+            "setting": "temperature",
+            "delta": 15
+          },
+          "note": "Shift white balance warmer, relative to each photo."
+        },
+        {
+          "actionId": "develop.adjust",
+          "params": {
+            "setting": "exposure",
+            "delta": 0.3
+          },
+          "note": "Raise exposure by a third of a stop."
         }
       ]
     }
@@ -1712,6 +1791,946 @@
       ],
       "defaultShortcuts": [],
       "availability": "Always available."
+    },
+    {
+      "id": "develop.adjust",
+      "title": "Adjust Setting",
+      "description": "Set (value) or nudge (delta) one Basic-panel slider on the selected photos: temperature, tint, exposure (stops, -5 to 5), contrast, highlights, shadows, whites, blacks, vibrance or saturation (-100 to 100). Use delta to change each photo relative to its current setting.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "temperature",
+              "tint",
+              "exposure",
+              "contrast",
+              "highlights",
+              "shadows",
+              "whites",
+              "blacks",
+              "vibrance",
+              "saturation"
+            ],
+            "description": "Which slider."
+          },
+          "value": {
+            "description": "New value (clamped to the slider's range).",
+            "type": "number"
+          },
+          "delta": {
+            "description": "Amount to add to the current value.",
+            "type": "number"
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "setting"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "setting": "exposure",
+            "delta": 0.3
+          },
+          "description": "Brighten the selection by a third of a stop."
+        },
+        {
+          "params": {
+            "setting": "temperature",
+            "value": 25
+          },
+          "description": "Warm up the white balance."
+        },
+        {
+          "params": {
+            "setting": "contrast",
+            "value": 0
+          },
+          "description": "Reset contrast."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when at least one photo is selected."
+    },
+    {
+      "id": "develop.crop.set",
+      "title": "Crop & Straighten",
+      "description": "Set the crop rectangle (fractions of the straightened photo: x, y, width, height) and/or straighten angle (-45 to 45 degrees) on the selected photos. The crop is kept inside the rotated photo automatically. Use aspect to crop to a ratio, as large as fits.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "description": "Left edge, 0–1.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "y": {
+            "description": "Top edge, 0–1.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "width": {
+            "description": "Width, 0–1.",
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 1
+          },
+          "height": {
+            "description": "Height, 0–1.",
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 1
+          },
+          "angle": {
+            "description": "Straighten angle in degrees, clockwise.",
+            "type": "number",
+            "minimum": -45,
+            "maximum": 45
+          },
+          "aspect": {
+            "description": "Crop to this aspect ratio (width:height), centred and as large as fits.",
+            "type": "string",
+            "enum": [
+              "original",
+              "1:1",
+              "4:5",
+              "5:4",
+              "2:3",
+              "3:2",
+              "16:9",
+              "9:16"
+            ]
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {
+            "aspect": "1:1"
+          },
+          "description": "Square crop."
+        },
+        {
+          "params": {
+            "angle": -2.5
+          },
+          "description": "Straighten a slightly tilted horizon."
+        },
+        {
+          "params": {
+            "x": 0.1,
+            "y": 0.1,
+            "width": 0.8,
+            "height": 0.8
+          },
+          "description": "Trim 10% from every edge."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when at least one photo is selected."
+    },
+    {
+      "id": "develop.cropTool.toggle",
+      "title": "Crop Tool",
+      "description": "Show or hide the crop & straighten overlay in Develop, where the crop can be dragged and resized.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [
+        {
+          "keys": "r"
+        }
+      ],
+      "availability": "Available only when the current view is Develop and a photo is active."
+    },
+    {
+      "id": "develop.export",
+      "title": "Export JPEG",
+      "description": "Render the selected photos with their edits at full resolution (or limited to maxEdge pixels on the long side) and save them as JPEGs: into the folder's _Exports subfolder when it is writable, otherwise as downloads. Originals are untouched; existing exports are never overwritten.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "quality": {
+            "description": "JPEG quality, 0.3–1 (default 0.9).",
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 1
+          },
+          "maxEdge": {
+            "description": "Longest side in pixels; omit for full size.",
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 16384
+          },
+          "destination": {
+            "description": "folder (_Exports) or download; defaults to folder when writable.",
+            "type": "string",
+            "enum": [
+              "folder",
+              "download"
+            ]
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Export the selection at full size."
+        },
+        {
+          "params": {
+            "maxEdge": 2048,
+            "quality": 0.85
+          },
+          "description": "Smaller copies for sharing."
+        }
+      ],
+      "defaultShortcuts": [
+        {
+          "keys": "mod+shift+e"
+        }
+      ],
+      "availability": "Available only when at least one photo is selected."
+    },
+    {
+      "id": "develop.hsl.set",
+      "title": "Set HSL",
+      "description": "Adjust one colour band's hue, saturation or luminance (-100 to 100) on the selected photos. Bands: red, orange, yellow, green, aqua, blue, purple, magenta. E.g. lower blue luminance to darken a sky.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "hue",
+              "saturation",
+              "luminance"
+            ],
+            "description": "What to change."
+          },
+          "band": {
+            "type": "string",
+            "enum": [
+              "red",
+              "orange",
+              "yellow",
+              "green",
+              "aqua",
+              "blue",
+              "purple",
+              "magenta"
+            ],
+            "description": "Which colour range."
+          },
+          "value": {
+            "type": "number",
+            "minimum": -100,
+            "maximum": 100,
+            "description": "New value, -100 to 100."
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "channel",
+          "band",
+          "value"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "channel": "luminance",
+            "band": "blue",
+            "value": -40
+          },
+          "description": "Darken blue skies."
+        },
+        {
+          "params": {
+            "channel": "saturation",
+            "band": "orange",
+            "value": -15
+          },
+          "description": "Calm down skin tones."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when at least one photo is selected."
+    },
+    {
+      "id": "develop.reset",
+      "title": "Reset Develop Settings",
+      "description": "Reset the selected photos' develop settings to unedited, or only the given groups.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "description": "Only these groups (wb, basic, presence, toneCurve, hsl, crop). Omit for all.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "wb",
+                "basic",
+                "presence",
+                "toneCurve",
+                "hsl",
+                "crop"
+              ]
+            }
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Reset everything."
+        },
+        {
+          "params": {
+            "groups": [
+              "crop"
+            ]
+          },
+          "description": "Remove the crop only."
+        }
+      ],
+      "defaultShortcuts": [
+        {
+          "keys": "mod+shift+r"
+        }
+      ],
+      "availability": "Available only when at least one photo is selected."
+    },
+    {
+      "id": "develop.settings.apply",
+      "title": "Apply Develop Settings",
+      "description": "Apply several develop settings at once to the selected photos (a look or preset): any Basic sliders, tone curve, HSL bands, crop. Values replace the current ones; omitted settings are unchanged.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "properties": {
+              "temperature": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Temperature, -100 to 100."
+              },
+              "tint": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Tint, -100 to 100."
+              },
+              "exposure": {
+                "type": "number",
+                "minimum": -5,
+                "maximum": 5,
+                "description": "Exposure, -5 to 5."
+              },
+              "contrast": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Contrast, -100 to 100."
+              },
+              "highlights": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Highlights, -100 to 100."
+              },
+              "shadows": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Shadows, -100 to 100."
+              },
+              "whites": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Whites, -100 to 100."
+              },
+              "blacks": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Blacks, -100 to 100."
+              },
+              "vibrance": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Vibrance, -100 to 100."
+              },
+              "saturation": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Saturation, -100 to 100."
+              },
+              "toneCurve": {
+                "description": "Tone curve control points [input, output], 0–1.",
+                "minItems": 2,
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              },
+              "hsl": {
+                "description": "Per-colour adjustments, -100 to 100, by band (red, orange, yellow, green, aqua, blue, purple, magenta).",
+                "type": "object",
+                "properties": {
+                  "hue": {
+                    "type": "object",
+                    "properties": {
+                      "red": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "orange": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "yellow": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "green": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "aqua": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "blue": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "purple": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "magenta": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      }
+                    }
+                  },
+                  "saturation": {
+                    "type": "object",
+                    "properties": {
+                      "red": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "orange": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "yellow": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "green": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "aqua": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "blue": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "purple": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "magenta": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      }
+                    }
+                  },
+                  "luminance": {
+                    "type": "object",
+                    "properties": {
+                      "red": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "orange": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "yellow": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "green": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "aqua": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "blue": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "purple": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      },
+                      "magenta": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100
+                      }
+                    }
+                  }
+                }
+              },
+              "crop": {
+                "description": "Crop rectangle (fractions) and straighten angle (degrees).",
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "width": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 1
+                  },
+                  "height": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 1
+                  },
+                  "angle": {
+                    "type": "number",
+                    "minimum": -45,
+                    "maximum": 45
+                  }
+                }
+              }
+            },
+            "description": "Settings to change; anything omitted is left as it is."
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "settings"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "settings": {
+              "temperature": 20,
+              "contrast": -10,
+              "saturation": -20,
+              "toneCurve": [
+                [
+                  0,
+                  0.06
+                ],
+                [
+                  0.5,
+                  0.52
+                ],
+                [
+                  1,
+                  0.94
+                ]
+              ]
+            }
+          },
+          "description": "A warm, faded film look."
+        },
+        {
+          "params": {
+            "settings": {
+              "saturation": -100
+            }
+          },
+          "description": "Black and white."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when at least one photo is selected."
+    },
+    {
+      "id": "develop.settings.copy",
+      "title": "Copy Settings",
+      "description": "Copy the active photo's develop settings (by default everything except crop) to paste onto other photos.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "description": "Settings groups: wb, basic, presence, toneCurve, hsl, crop. Defaults to everything except crop.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "wb",
+                "basic",
+                "presence",
+                "toneCurve",
+                "hsl",
+                "crop"
+              ]
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Copy all settings except crop."
+        },
+        {
+          "params": {
+            "groups": [
+              "wb",
+              "toneCurve"
+            ]
+          },
+          "description": "Copy only white balance and the curve."
+        }
+      ],
+      "defaultShortcuts": [
+        {
+          "keys": "mod+shift+c"
+        }
+      ],
+      "availability": "Available only when a photo is active."
+    },
+    {
+      "id": "develop.settings.get",
+      "title": "Get Develop Settings",
+      "description": "Return a photo's full develop settings (the active photo by default) and whether it has been edited.",
+      "category": "Develop",
+      "kind": "query",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "photoId": {
+            "description": "Defaults to the active photo.",
+            "type": "string"
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Settings of the active photo."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "develop.settings.paste",
+      "title": "Paste Settings",
+      "description": "Paste copied develop settings onto the selected photos (only the groups that were copied).",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Paste onto the selection."
+        }
+      ],
+      "defaultShortcuts": [
+        {
+          "keys": "mod+shift+v"
+        }
+      ],
+      "availability": "Available only when at least one photo is selected and develop settings have been copied."
+    },
+    {
+      "id": "develop.settings.sync",
+      "title": "Sync Settings",
+      "description": "Copy the active photo's develop settings to every other selected photo (by default everything except crop).",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "description": "Settings groups: wb, basic, presence, toneCurve, hsl, crop. Defaults to everything except crop.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "wb",
+                "basic",
+                "presence",
+                "toneCurve",
+                "hsl",
+                "crop"
+              ]
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Sync everything except crop."
+        },
+        {
+          "params": {
+            "groups": [
+              "wb"
+            ]
+          },
+          "description": "Match white balance only."
+        }
+      ],
+      "defaultShortcuts": [
+        {
+          "keys": "mod+shift+s"
+        }
+      ],
+      "availability": "Available only when a photo is active and more than one photo is selected."
+    },
+    {
+      "id": "develop.toneCurve.set",
+      "title": "Set Tone Curve",
+      "description": "Replace the master tone curve on the selected photos with control points [input, output] in 0–1. [[0,0],[1,1]] is neutral; lifting the first point fades blacks, an S-shape adds contrast.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "points": {
+            "minItems": 2,
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "description": "Control points [input, output], 0–1."
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "points"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                0.25,
+                0.2
+              ],
+              [
+                0.75,
+                0.8
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          },
+          "description": "Gentle S-curve for contrast."
+        },
+        {
+          "params": {
+            "points": [
+              [
+                0,
+                0.08
+              ],
+              [
+                1,
+                0.95
+              ]
+            ]
+          },
+          "description": "Faded film look: lifted blacks, softer whites."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when at least one photo is selected."
     },
     {
       "id": "history.redo",

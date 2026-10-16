@@ -1,6 +1,8 @@
 /// <reference path="./fs-types.d.ts" />
 import {
+  EXPORTS_DIR,
   TRASH_DIR,
+  uniqueNameAsync,
   imageMimeType,
   isIgnoredDir,
   isSidecarPath,
@@ -189,6 +191,16 @@ export class FsAccessSource implements PhotoSource {
       false,
     );
     return { photos, sidecars };
+  }
+
+  async writeExport(fileName: string, data: Blob): Promise<string> {
+    this.requireWritable();
+    const dir = await this.root.getDirectoryHandle(EXPORTS_DIR, { create: true });
+    const name = await uniqueNameAsync(fileName, (n) => dir.getFileHandle(n).then(() => true, () => false));
+    const writable = await (await dir.getFileHandle(name, { create: true })).createWritable();
+    await writable.write(data);
+    await writable.close();
+    return `${EXPORTS_DIR}/${name}`;
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────

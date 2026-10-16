@@ -1,3 +1,4 @@
+import type { EditRecipe } from "../develop/recipe";
 import type { ColorLabel, ExifSummary, Flag, FolderInfo, PhotoRecord } from "../state/types";
 
 /**
@@ -19,8 +20,8 @@ export interface SourceFile {
   size: number;
   lastModified: number;
   mimeType: string;
-  /** Sample library only: synthetic preview colour and capture time (there is no real file). */
-  sample?: { hue: number; capturedAt: string };
+  /** Sample library only: synthetic preview colour, capture time and size (there is no real file). */
+  sample?: { hue: number; capturedAt: string; width: number; height: number };
 }
 
 /**
@@ -46,6 +47,8 @@ export interface PhotoSource {
   listTrash(): Promise<SourceFile[]>;
   /** Permanently delete the trash folder. Returns how many photos were deleted. */
   emptyTrash(): Promise<number>;
+  /** Write an exported file into EXPORTS_DIR without overwriting anything. Returns its path. */
+  writeExport(fileName: string, data: Blob): Promise<string>;
 }
 
 export interface FileOpResult<T> {
@@ -79,6 +82,8 @@ export interface StoredPhotoMeta {
   width?: number;
   height?: number;
   exif?: ExifSummary;
+  /** Develop settings; null once reset to unedited. */
+  edit?: EditRecipe | null;
 }
 
 export interface MetadataStore {
@@ -109,6 +114,11 @@ export interface PreviewService {
   /** Object URL for the full-size image. */
   imageUrl(photo: PhotoRecord): Promise<string | null>;
   readIndexData(photo: PhotoRecord): Promise<PhotoIndexData | null>;
+  /**
+   * Decode the photo (oriented) for editing or export, optionally scaled so
+   * its long edge is at most maxEdge. Sample photos get a synthetic image.
+   */
+  decode(photo: PhotoRecord, opts?: { maxEdge?: number }): Promise<ImageBitmap | null>;
   /** Drop cached object URLs (e.g. when the folder changes). */
   reset(): void;
 }
@@ -141,6 +151,16 @@ export interface AIProvider {
 /** Hands a generated file to the user (browser download, or a server upload later). */
 export interface DownloadService {
   save(fileName: string, content: string, mimeType: string): void;
+  saveBlob(fileName: string, blob: Blob): void;
+}
+
+/** Full-resolution rendering of edits to a JPEG (in a worker where possible). */
+export interface ExportService {
+  renderJpeg(
+    image: ImageBitmap,
+    recipe: EditRecipe,
+    opts: { quality: number; maxEdge?: number },
+  ): Promise<{ blob: Blob; width: number; height: number }>;
 }
 
 export interface Services {
@@ -149,6 +169,7 @@ export interface Services {
   metadata: MetadataStore;
   previews: PreviewService;
   persistence: PersistenceBarrier;
+  exporter: ExportService;
   ai: AIProvider;
   downloads: DownloadService;
 }

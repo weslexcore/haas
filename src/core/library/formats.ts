@@ -25,9 +25,19 @@ export const isSidecarPath = (path: string) => extension(path) === "xmp";
  */
 export const TRASH_DIR = "_Rejected";
 
-/** Folder names never scanned: hidden folders, NAS/OS metadata, and the app's trash at the root. */
+/** Subfolder that exported JPEGs are written to (when the folder is writable). */
+export const EXPORTS_DIR = "_Exports";
+
+/** Folder names never scanned: hidden folders, NAS/OS metadata, and the app's own folders at the root. */
 export const isIgnoredDir = (name: string, atRoot: boolean) =>
-  name.startsWith(".") || name === "@eaDir" || name === "__MACOSX" || (atRoot && name === TRASH_DIR);
+  name.startsWith(".") || name === "@eaDir" || name === "__MACOSX" || (atRoot && (name === TRASH_DIR || name === EXPORTS_DIR));
+
+/** "a/IMG_1.jpg" → "IMG_1" */
+export function baseName(path: string): string {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(0, dot) : name;
+}
 
 export const trashPath = (path: string) => `${TRASH_DIR}/${path}`;
 
@@ -45,4 +55,22 @@ export function sidecarCandidates(photoPath: string): string[] {
 export function splitPath(path: string): { dir: string[]; name: string } {
   const parts = path.split("/");
   return { dir: parts.slice(0, -1), name: parts.at(-1)! };
+}
+
+/** "IMG_1.jpg", then "IMG_1-2.jpg", "IMG_1-3.jpg"… — the first name `taken` says is free. */
+export function uniqueName(fileName: string, taken: (name: string) => boolean): string {
+  if (!taken(fileName)) return fileName;
+  const dot = fileName.lastIndexOf(".");
+  const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+  const ext = dot > 0 ? fileName.slice(dot) : "";
+  for (let i = 2; ; i++) if (!taken(`${stem}-${i}${ext}`)) return `${stem}-${i}${ext}`;
+}
+
+/** Async variant for file systems. */
+export async function uniqueNameAsync(fileName: string, taken: (name: string) => Promise<boolean>): Promise<string> {
+  if (!(await taken(fileName))) return fileName;
+  const dot = fileName.lastIndexOf(".");
+  const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+  const ext = dot > 0 ? fileName.slice(dot) : "";
+  for (let i = 2; ; i++) if (!(await taken(`${stem}-${i}${ext}`))) return `${stem}-${i}${ext}`;
 }

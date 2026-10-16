@@ -71,3 +71,19 @@ describe("XMP sidecars", () => {
     expect(() => writeXmp("<x:xmpmeta><broken", { rating: 1, flag: "none", colorLabel: "none" })).toThrow(XmpError);
   });
 });
+
+describe("develop recipe in XMP", () => {
+  it("round-trips the recipe and removes it when reset", async () => {
+    const { defaultRecipe } = await import("../../src/core/develop/recipe");
+    const edit = { ...defaultRecipe(), exposure: 0.7, toneCurve: [[0, 0.1], [1, 1]] as Array<[number, number]> };
+    const xml = writeXmp(null, { rating: 3, flag: "none", colorLabel: "none", edit });
+    expect(parseXmp(xml).edit).toEqual(edit);
+    const cleared = writeXmp(xml, { rating: 3, flag: "none", colorLabel: "none", edit: null });
+    expect(parseXmp(cleared).edit).toBeUndefined();
+  });
+
+  it("ignores a malformed recipe", () => {
+    const xml = writeXmp(null, { rating: 1, flag: "none", colorLabel: "none" }).replace('photo:Rating="1"', 'photo:Rating="1" photo:Edit="{oops"');
+    expect(parseXmp(xml)).toEqual({ rating: 1, flag: "none" });
+  });
+});

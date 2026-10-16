@@ -3,6 +3,13 @@ import type { PhotoSource, SourceFile, StoredPhotoMeta } from "../services";
 import { selectVisibleIds } from "../state/selectors";
 import { defaultFilter, type PhotoRecord } from "../state/types";
 import { parseXmp, type XmpCulling } from "../xmp/xmp";
+import { isDefaultRecipe, recipeSchema, type EditRecipe } from "../develop/recipe";
+
+function storedEdit(stored: StoredPhotoMeta | undefined): EditRecipe | undefined {
+  if (!stored?.edit) return undefined;
+  const parsed = recipeSchema.safeParse(stored.edit);
+  return parsed.success ? parsed.data : undefined;
+}
 import { indexPhotos } from "./indexer";
 import { fileKey, localIso } from "./util";
 
@@ -29,6 +36,7 @@ function buildRecord(
     rating: stored?.rating ?? 0,
     flag: stored?.flag ?? "none",
     colorLabel: stored?.colorLabel ?? "none",
+    edit: storedEdit(stored),
   };
   // A sidecar edited after our last save (e.g. in Lightroom or darktable) wins.
   if (sidecar && (!stored || sidecar.lastModified > stored.savedAt)) {
@@ -38,6 +46,7 @@ function buildRecord(
       // Unreadable sidecar: keep stored values; the sidecar is left untouched.
     }
   }
+  const { edit, ...rest } = culling;
   const record: PhotoRecord = {
     id: f.path,
     fileName: f.name,
@@ -46,14 +55,17 @@ function buildRecord(
     mimeType: f.mimeType,
     capturedAt: cached?.capturedAt ?? localIso(f.lastModified),
     indexed: !!cached,
-    ...culling,
+    ...rest,
   };
+  if (edit && !isDefaultRecipe(edit)) record.edit = edit;
   if (cached?.width) record.width = cached.width;
   if (cached?.height) record.height = cached.height;
   if (cached?.exif) record.exif = cached.exif;
   if (f.sample) {
     record.placeholderHue = f.sample.hue;
     record.capturedAt = f.sample.capturedAt;
+    record.width = f.sample.width;
+    record.height = f.sample.height;
     record.indexed = true;
   }
   return record;

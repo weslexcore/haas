@@ -1,6 +1,7 @@
 import type { AnyAction } from "../core/actions/types";
 import { ActionRegistry } from "../core/actions/registry";
 import { appActions } from "./app";
+import { developActions } from "./develop";
 import { historyActions } from "./history";
 import { libraryActions } from "./library";
 import { navigationActions } from "./navigation";
@@ -16,6 +17,7 @@ export const allActions: readonly AnyAction[] = [
   ...navigationActions,
   ...libraryActions,
   ...trashActions,
+  ...developActions,
   ...historyActions,
 ];
 

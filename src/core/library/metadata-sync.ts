@@ -3,12 +3,13 @@ import type { AppStore } from "../state/store";
 import type { PhotoRecord } from "../state/types";
 import { writeXmp } from "../xmp/xmp";
 
-const CULLING_FIELDS = ["rating", "flag", "colorLabel"] as const;
+/** Fields persisted per photo; `edit` changes by reference whenever a develop setting changes. */
+const CULLING_FIELDS = ["rating", "flag", "colorLabel", "edit"] as const;
 
 const changedCulling = (a: PhotoRecord, b: PhotoRecord) => CULLING_FIELDS.some((k) => a[k] !== b[k]);
 
 /**
- * Persists rating/flag/label changes, whatever caused them (a command, undo,
+ * Persists rating/flag/label/edit changes, whatever caused them (a command, undo,
  * an AI plan): to the metadata store always, and to XMP sidecars when the
  * folder allows writes. Diffing the store keeps actions free of I/O.
  */
@@ -68,7 +69,14 @@ export class MetadataSync {
     try {
       await this.services.metadata.save(
         folderId,
-        photos.map((p) => ({ path: p.id, rating: p.rating, flag: p.flag, colorLabel: p.colorLabel, savedAt })),
+        photos.map((p) => ({
+          path: p.id,
+          rating: p.rating,
+          flag: p.flag,
+          colorLabel: p.colorLabel,
+          edit: p.edit ?? null,
+          savedAt,
+        })),
       );
     } catch (error) {
       this.opts.onError?.(`Couldn't save ratings: ${String(error)}`);

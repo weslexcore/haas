@@ -1,27 +1,48 @@
-import { useAppState, useShortcut } from "../hooks";
-import { Kbd } from "../shell/Kbd";
+import { useState } from "react";
+import type { Histogram } from "../../core/develop/pipeline";
+import { CropOverlay } from "../develop/CropOverlay";
+import { DevelopCanvas } from "../develop/DevelopCanvas";
+import { DevelopPanel } from "../develop/DevelopPanel";
+import { defaultRecipe } from "../../core/develop/recipe";
+import { useAppState, useDispatch } from "../hooks";
 import { Filmstrip } from "./Filmstrip";
-import { PhotoStage } from "./PhotoStage";
+import { InfoOverlay } from "./PhotoStage";
 import styles from "./DevelopView.module.css";
 
 export function DevelopView() {
+  const photo = useAppState((s) => (s.selection.activeId ? s.photos.byId[s.selection.activeId] : undefined));
   const beforeAfter = useAppState((s) => s.beforeAfter);
   const filmstrip = useAppState((s) => s.filmstrip);
-  const toggle = useShortcut("view.beforeAfter.toggle");
+  const cropTool = useAppState((s) => s.develop.cropTool);
+  const info = useAppState((s) => s.infoOverlay);
+  const dispatch = useDispatch();
+  const [histogram, setHistogram] = useState<Histogram | null>(null);
+
+  if (!photo) return <div className={styles.layout} />;
+  const crop = (photo.edit ?? defaultRecipe()).crop;
 
   return (
     <div className={styles.layout}>
       <div className={styles.main}>
-        <PhotoStage dimmed={beforeAfter} badge={beforeAfter ? "Before" : undefined} />
+        <div className={styles.stage}>
+          <DevelopCanvas
+            key={photo.id}
+            photo={photo}
+            original={beforeAfter}
+            ignoreCrop={cropTool && !beforeAfter}
+            onHistogram={setHistogram}
+            overlay={cropTool && !beforeAfter ? (display) => <CropOverlay crop={crop} display={display} /> : undefined}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              void dispatch("app.contextMenu.open", { menuId: "loupe.photo", x: e.clientX, y: e.clientY });
+            }}
+          />
+          {beforeAfter && <span className={styles.badge}>Before</span>}
+          {info && <InfoOverlay photo={photo} />}
+        </div>
         {filmstrip && <Filmstrip />}
       </div>
-      <aside className={styles.panel} aria-label="Develop controls">
-        <h2 className={styles.heading}>Develop</h2>
-        <p className={styles.note}>Adjustments (exposure, white balance, tone curve, HSL…) arrive in Phase 3.</p>
-        <p className={styles.note}>
-          Toggle before/after with {toggle ? <Kbd strokes={toggle.strokes} /> : "the command palette"}.
-        </p>
-      </aside>
+      <DevelopPanel photo={photo} histogram={histogram} />
     </div>
   );
 }

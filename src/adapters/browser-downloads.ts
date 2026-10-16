@@ -2,7 +2,11 @@ import type { DownloadService } from "../core/services";
 
 export class BrowserDownloads implements DownloadService {
   save(fileName: string, content: string, mimeType: string): void {
-    const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+    this.saveBlob(fileName, new Blob([content], { type: mimeType }));
+  }
+
+  saveBlob(fileName: string, blob: Blob): void {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = fileName;

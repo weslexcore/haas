@@ -1,0 +1,40 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.rect {
+  position: absolute;
+  outline: 1px solid rgb(255 255 255 / 0.9);
+  /* Dim everything outside the crop. */
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.55);
+  cursor: move;
+}
+
+.thirds {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent calc(33.33% - 0.5px), rgb(255 255 255 / 0.35) calc(33.33% - 0.5px), rgb(255 255 255 / 0.35) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px), transparent calc(66.66% - 0.5px), rgb(255 255 255 / 0.35) calc(66.66% - 0.5px), rgb(255 255 255 / 0.35) calc(66.66% + 0.5px), transparent calc(66.66% + 0.5px)),
+    linear-gradient(0deg, transparent calc(33.33% - 0.5px), rgb(255 255 255 / 0.35) calc(33.33% - 0.5px), rgb(255 255 255 / 0.35) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px), transparent calc(66.66% - 0.5px), rgb(255 255 255 / 0.35) calc(66.66% - 0.5px), rgb(255 255 255 / 0.35) calc(66.66% + 0.5px), transparent calc(66.66% + 0.5px));
+  pointer-events: none;
+}
+
+.handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px;
+  border: 2px solid #fff;
+  background: rgb(0 0 0 / 0.4);
+}
+
+.nw { left: 0; top: 0; cursor: nwse-resize; }
+.n { left: 50%; top: 0; cursor: ns-resize; }
+.ne { left: 100%; top: 0; cursor: nesw-resize; }
+.e { left: 100%; top: 50%; cursor: ew-resize; }
+.se { left: 100%; top: 100%; cursor: nwse-resize; }
+.s { left: 50%; top: 100%; cursor: ns-resize; }
+.sw { left: 0; top: 100%; cursor: nesw-resize; }
+.w { left: 0; top: 50%; cursor: ew-resize; }

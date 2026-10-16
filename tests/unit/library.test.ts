@@ -288,3 +288,25 @@ describe("internal actions", () => {
     expect(rt.registry.get("library.index.apply")?.internal).toBe(true);
   });
 });
+
+describe("develop edits persistence", () => {
+  it("saves edits to storage and the sidecar, and restores them on reload", async () => {
+    const ctx = await openShoot();
+    const sync = new MetadataSync(ctx.rt.store, ctx.rt.services, { debounceMs: 1 });
+    sync.start();
+    await ctx.rt.dispatch("library.selection.set", { ids: ["a/IMG_1.jpg"] });
+    await ctx.rt.dispatch("develop.adjust", { setting: "exposure", value: 1.25 });
+    await sync.flush();
+    expect(parseXmp((await ctx.source.readSidecar("a/IMG_1.jpg"))!.text).edit).toMatchObject({ exposure: 1.25 });
+
+    ctx.rt.library.nextPick = ctx.source;
+    await ctx.rt.dispatch("library.folder.open");
+    expect(ctx.rt.store.getState().photos.byId["a/IMG_1.jpg"]!.edit).toMatchObject({ exposure: 1.25 });
+
+    await ctx.rt.dispatch("library.selection.set", { ids: ["a/IMG_1.jpg"] });
+    await ctx.rt.dispatch("develop.reset");
+    await sync.flush();
+    expect((await ctx.rt.services.metadata.load("f1")).get("a/IMG_1.jpg")!.edit).toBeNull();
+    expect(parseXmp((await ctx.source.readSidecar("a/IMG_1.jpg"))!.text).edit).toBeUndefined();
+  });
+});

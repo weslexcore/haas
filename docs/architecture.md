@@ -68,7 +68,24 @@ MetadataSync ◄── store diff (rating/flag/label changed, by any cause incl.
 - **Removing photos** (`core/library/trash.ts`). `library.rejected.remove` (⌘⌫) moves rejected photos and their sidecars into `_Rejected/` at the folder root, keeping their relative paths. It waits for pending sidecar writes first. It is undoable: ⌘Z moves the files back and restores the previous state, and restoring is undoable too. The library never lists `_Rejected`, and the filter bar shows how many photos are in it. `library.removed.restore` moves them back, refusing to overwrite a file that has reappeared at the original path. `library.removed.empty` is the only operation that deletes files. It needs `{ confirm: true }` (the UI asks first) and deletes permanently, because browsers can't use the system Trash. It clears undo history, since earlier removals can no longer be reversed. Moves use the native `FileSystemHandle.move()` where supported; otherwise they copy, check the size, and only then delete the original. Read-only folders (Safari/iPad fallback, sample library) can't remove photos; the filter can hide rejects instead.
 - **Image file contents are never modified.** Files are only moved into `_Rejected` (and back) on request, and only deleted when the user empties it.
 
-**Services** (`core/services`). `SettingsStore`, `LibraryProvider`/`PhotoSource`, `MetadataStore`, `PreviewService`, `AIProvider` and `DownloadService` are interfaces, with browser implementations in `src/adapters` (and in-memory ones for tests). A server backend can replace any of them without touching actions.
+## Develop
+
+```
+EditRecipe (per photo, in the store) ──► uniformsFor() ──► DevelopRenderer (WebGL2) ──► preview canvas / histogram
+        │                                     │                     └─ export.worker: OffscreenCanvas ─► JPEG ─► _Exports/
+        └─ MetadataSync ─► IndexedDB + XMP photo:Edit                └─ edited thumbnails (shared context)
+```
+
+- **Recipe** (`core/develop/recipe.ts`). A Zod schema with neutral defaults: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a master tone curve, HSL for 8 colour bands, and crop/straighten. A photo with default settings has no `edit` at all. Groups (`wb`, `basic`, `presence`, `toneCurve`, `hsl`, `crop`) drive reset, copy/paste and sync. The default copy excludes crop, as in Lightroom.
+- **Pipeline** (`core/develop/pipeline.ts`). The pixel maths, specified once in TypeScript: sRGB → linear → white balance and exposure → tone on perceptual luminance, applied as a luminance ratio so hues don't shift → sRGB → HSL bands, vibrance and saturation. `adapters/render/shaders.ts` implements the same formulas in GLSL. `tests/e2e/develop-pipeline.spec.ts` renders a test image on the GPU and checks every pixel against the CPU reference (within a few 8-bit levels).
+- **Tone curve.** A monotone cubic through the control points (it never overshoots), sampled into an 8-bit lookup table texture.
+- **Crop** (`core/develop/crop.ts`). The rectangle lives in the straightened frame. `constrainCrop` keeps it inside the rotated photo by shrinking it about its centre, as Lightroom does. The shader maps output uv to source uv with a single affine transform.
+- **Renderer** (`core/develop/renderer.ts`). A backend-neutral interface; `WebGL2Renderer` works on a canvas or an OffscreenCanvas, and a WebGPU backend can implement the same interface. The preview decodes at a 2560px long edge (full size for 100% zoom in Loupe). The histogram comes from a 256px off-screen render of the final, cropped image.
+- **Undo.** Develop commands set `coalesce` keys, so a slider drag or crop drag is one undo step.
+- **Export** (`develop.export`). The image is decoded at full resolution (oriented), rendered in a worker, and encoded as JPEG. It is written to `_Exports/` without overwriting anything (`name-2.jpg`, …), or downloaded for read-only folders. EXIF isn't copied into exports yet.
+- **Edits in Loupe and thumbnails.** Edited photos render through the pipeline in Loupe. The grid and filmstrip re-render the cached thumbnail with the recipe once editing pauses.
+
+**Services** (`core/services`). `SettingsStore`, `LibraryProvider`/`PhotoSource`, `MetadataStore`, `PreviewService`, `ExportService`, `AIProvider` and `DownloadService` are interfaces, with browser implementations in `src/adapters` (and in-memory ones for tests). A server backend can replace any of them without touching actions.
 
 **Runtime** (`core/runtime.ts`). `createRuntime()` wires everything together. The browser calls it from `ui/bootstrap.ts`, and tests call it from `tests/unit/helpers.ts`. In the browser, `window.photo.dispatch(...)` exposes the same dispatcher for scripting and end-to-end tests.
 

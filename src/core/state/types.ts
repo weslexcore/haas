@@ -1,3 +1,5 @@
+import type { EditRecipe, SettingsGroup } from "../develop/recipe";
+
 export type ViewMode = "grid" | "loupe" | "develop";
 export type ThemePreference = "light" | "dark" | "system";
 export type Flag = "pick" | "reject" | "none";
@@ -37,6 +39,8 @@ export interface PhotoRecord {
   indexed?: boolean;
   /** Placeholder preview colour for the sample library (no real file). */
   placeholderHue?: number;
+  /** Develop settings; absent means unedited. */
+  edit?: EditRecipe;
 }
 
 export interface FolderInfo {
@@ -86,6 +90,13 @@ export interface ContextMenuState {
   y: number | null;
 }
 
+export interface DevelopState {
+  /** Settings copied with develop.settings.copy, and which groups to paste. */
+  clipboard: { recipe: EditRecipe; groups: SettingsGroup[] } | null;
+  /** Crop & straighten overlay is active. */
+  cropTool: boolean;
+}
+
 export interface AppState {
   view: ViewMode;
   theme: ThemePreference;
@@ -98,6 +109,7 @@ export interface AppState {
   palette: PaletteState;
   contextMenu: ContextMenuState | null;
   shortcutsOpen: boolean;
+  develop: DevelopState;
   library: {
     folder: FolderInfo | null;
     status: LibraryStatus;
@@ -131,6 +143,7 @@ export const initialState: AppState = {
   palette: { open: false, actionId: null },
   contextMenu: null,
   shortcutsOpen: false,
+  develop: { clipboard: null, cropTool: false },
   library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0 },
   photos: { order: [], byId: {} },
   selection: { activeId: null, ids: [] },
