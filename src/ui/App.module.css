@@ -1,0 +1,10 @@
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+
+.main {
+  min-height: 0;
+  overflow: hidden;
+}

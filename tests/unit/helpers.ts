@@ -1,0 +1,127 @@
+import { allActions } from "../../src/actions";
+import { MemoryMetadataStore } from "../../src/adapters/db";
+import { NullPreviewService } from "../../src/adapters/previews/preview-service";
+import { SampleSource } from "../../src/adapters/sample-source";
+import { MemorySettingsStore } from "../../src/adapters/settings";
+import { StubAIProvider } from "../../src/adapters/stub-ai-provider";
+import type { AnyAction } from "../../src/core/actions/types";
+import type { MenuDefinition } from "../../src/core/menus/registry";
+import { createRuntime, type Runtime } from "../../src/core/runtime";
+import type { LibraryProvider, PhotoIndexData, PhotoSource, PreviewService } from "../../src/core/services";
+import type { PhotoRecord } from "../../src/core/state/types";
+import { allMenus } from "../../src/menus";
+
+/** Library provider for tests: the sample library, plus folders a test hands it. */
+export class TestLibraryProvider implements LibraryProvider {
+  active: PhotoSource | null = null;
+  /** What the next pickFolder() "chooses"; null simulates cancel. */
+  nextPick: PhotoSource | null = null;
+  restore: Awaited<ReturnType<LibraryProvider["restoreLast"]>> = null;
+  private known = new Map<string, PhotoSource>();
+
+  constructor(private readonly sampleCount = 10) {}
+
+  current() {
+    return this.active;
+  }
+  async pickFolder() {
+    if (this.nextPick) {
+      this.known.set(this.nextPick.folder.id, this.nextPick);
+      this.active = this.nextPick;
+    }
+    return this.nextPick;
+  }
+  async openSample() {
+    return (this.active = new SampleSource(this.sampleCount));
+  }
+  async restoreLast() {
+    if (this.restore && "source" in this.restore) this.active = this.restore.source;
+    return this.restore;
+  }
+  async reconnect(folderId: string) {
+    const s = this.known.get(folderId) ?? null;
+    if (s) this.active = s;
+    return s;
+  }
+  async recentFolders() {
+    return [...this.known.values()].map((s) => s.folder);
+  }
+}
+
+/** Index data from a lookup table instead of decoding files. */
+export class FakePreviews extends NullPreviewService implements PreviewService {
+  constructor(private readonly data: Record<string, PhotoIndexData> = {}) {
+    super();
+  }
+  override async readIndexData(photo: PhotoRecord) {
+    return this.data[photo.id] ?? {};
+  }
+}
+
+export interface TestRuntime extends Runtime {
+  downloads: Array<{ fileName: string; content: string }>;
+  library: TestLibraryProvider;
+  metadata: MemoryMetadataStore;
+}
+
+export async function createTestRuntime(
+  opts: {
+    isMac?: boolean;
+    photos?: number;
+    actions?: readonly AnyAction[];
+    menus?: readonly MenuDefinition[];
+    previews?: PreviewService;
+    loadSample?: boolean;
+  } = {},
+): Promise<TestRuntime> {
+  const downloads: TestRuntime["downloads"] = [];
+  const library = new TestLibraryProvider(opts.photos ?? 10);
+  const metadata = new MemoryMetadataStore();
+  const runtime = createRuntime({
+    actions: opts.actions ?? allActions,
+    menus: opts.menus ?? allMenus,
+    platform: { isMac: opts.isMac ?? false, prefersDark: () => false },
+    services: {
+      settings: new MemorySettingsStore(),
+      library,
+      metadata,
+      previews: opts.previews ?? new FakePreviews(),
+      ai: new StubAIProvider(),
+      downloads: { save: (fileName, content) => downloads.push({ fileName, content }) },
+    },
+  });
+  await runtime.keybindings.load();
+  if (opts.loadSample !== false && runtime.registry.get("library.sample.load")) await runtime.dispatch("library.sample.load");
+  return Object.assign(runtime, { downloads, library, metadata });
+}
+
+export function key(
+  key: string,
+  mods: Partial<{ meta: boolean; ctrl: boolean; alt: boolean; shift: boolean }> = {},
+  target?: unknown,
+) {
+  let prevented = false;
+  return {
+    key,
+    code: /^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : "",
+    metaKey: !!mods.meta,
+    ctrlKey: !!mods.ctrl,
+    altKey: !!mods.alt,
+    shiftKey: !!mods.shift,
+    target,
+    preventDefault() {
+      prevented = true;
+    },
+    get prevented() {
+      return prevented;
+    },
+  };
+}
+
+/** Let fire-and-forget dispatches settle (microtasks only, so it works with fake timers). */
+export async function flush(): Promise<void> {
+  for (let i = 0; i < 50; i++) await Promise.resolve();
+}
+
+/** Wait for background work that uses real timers (indexing batches, debounced saves). */
+export const settle = (ms = 20) => new Promise((r) => setTimeout(r, ms));

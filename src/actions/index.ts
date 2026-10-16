@@ -1,0 +1,22 @@
+import type { AnyAction } from "../core/actions/types";
+import { ActionRegistry } from "../core/actions/registry";
+import { appActions } from "./app";
+import { historyActions } from "./history";
+import { libraryActions } from "./library";
+import { navigationActions } from "./navigation";
+import { shortcutActions } from "./shortcuts";
+import { viewActions } from "./view";
+
+/** Every action in the app. Add new action modules here. */
+export const allActions: readonly AnyAction[] = [
+  ...appActions,
+  ...shortcutActions,
+  ...viewActions,
+  ...navigationActions,
+  ...libraryActions,
+  ...historyActions,
+];
+
+export function createActionRegistry(): ActionRegistry {
+  return new ActionRegistry().registerAll(allActions);
+}
