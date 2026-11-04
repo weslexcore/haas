@@ -49,6 +49,10 @@
       "explanation": "The library is one folder (with subfolders). Ratings, flags and labels are stored in the app and, when the folder was opened with write access, in XMP sidecars next to the photos so Lightroom, Bridge and darktable can read them. The contents of photos are never modified."
     },
     {
+      "term": "RAW files",
+      "explanation": "Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 and others; mimeType image/x-…) are photos like any other: rated, edited and exported the same way. A RAW and a JPEG with the same name are one photo (the RAW, with companion set to the JPEG's path); the JPEG moves with it when it is removed."
+    },
+    {
       "term": "Seeing photos",
       "explanation": "Metadata (rating, flags, EXIF, capture time) comes from query actions. To judge what is in a photo (sharpness, faces, subject, colour, how an edit looks), view it with library.photos.view, which returns images with the current edits applied. Viewing costs tokens: scan with thumbnails, check focus with detail."
     },

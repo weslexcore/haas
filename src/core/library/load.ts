@@ -53,6 +53,7 @@ function buildRecord(
     size: f.size,
     lastModified: f.lastModified,
     mimeType: f.mimeType,
+    ...(f.companion ? { companion: f.companion } : {}),
     capturedAt: cached?.capturedAt ?? localIso(f.lastModified),
     indexed: !!cached,
     ...rest,

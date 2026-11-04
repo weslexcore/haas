@@ -36,6 +36,8 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 **Folders and sidecars.** The library is one folder (with subfolders). Ratings, flags and labels are stored in the app and, when the folder was opened with write access, in XMP sidecars next to the photos so Lightroom, Bridge and darktable can read them. The contents of photos are never modified.
 
+**RAW files.** Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 and others; mimeType image/x-…) are photos like any other: rated, edited and exported the same way. A RAW and a JPEG with the same name are one photo (the RAW, with companion set to the JPEG's path); the JPEG moves with it when it is removed.
+
 **Seeing photos.** Metadata (rating, flags, EXIF, capture time) comes from query actions. To judge what is in a photo (sharpness, faces, subject, colour, how an edit looks), view it with library.photos.view, which returns images with the current edits applied. Viewing costs tokens: scan with thumbnails, check focus with detail.
 
 **Removing photos.** Rejected photos can be removed from the library: they move, with their sidecars, into a _Rejected subfolder of the open folder and can be restored from there. Only emptying that folder deletes files, permanently (not to the system Trash), and it needs the user's explicit confirmation.

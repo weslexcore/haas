@@ -61,7 +61,9 @@ export class WorkerPool {
       if (!slot) return;
       const job = this.interactive.pop() ?? this.background.shift()!;
       slot.busy = job;
-      slot.worker.postMessage({ id: job.id, task: job.task } satisfies WorkerRequest);
+      // Decoded pixels move to the worker rather than being copied.
+      const transfer = job.task.type === "thumbnail" && typeof ImageBitmap !== "undefined" && job.task.file instanceof ImageBitmap ? [job.task.file] : [];
+      slot.worker.postMessage({ id: job.id, task: job.task } satisfies WorkerRequest, transfer);
     }
   }
 
