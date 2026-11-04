@@ -3,7 +3,9 @@ import { WebGL2Renderer } from "../../adapters/render/webgl2-renderer";
 import { cropOutputSize, type Size } from "../../core/develop/crop";
 import type { Histogram } from "../../core/develop/pipeline";
 import { DEFAULT_CROP, defaultRecipe, type EditRecipe } from "../../core/develop/recipe";
+import { displayedRecord } from "../../core/state/selectors";
 import type { PhotoRecord } from "../../core/state/types";
+import { useAppState } from "../hooks";
 import { useRuntime } from "../runtime-context";
 import { unsupportedMessage } from "../unsupported";
 import { PREVIEW_EDGE, editingBitmap } from "./bitmaps";
@@ -81,6 +83,21 @@ export function DevelopCanvas({ photo, original = false, ignoreCrop = false, sca
     // The file, not the record: rating or edit changes must not reload the image.
   }, [photo.id, photo.lastModified, maxEdge, services]);
 
+  // While the decode runs (a second or two for a RAW), the photo as Loupe shows it stands in,
+  // so moving to Develop never shows an empty stage.
+  const shown = useAppState((s) => displayedRecord(s, photo));
+  const [placeholder, setPlaceholder] = useState<{ id: string; url: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void services.previews
+      .imageUrl(shown)
+      .then((url) => live && url && setPlaceholder({ id: photo.id, url }))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [photo.id, shown.id, shown.lastModified, services]);
+
   // Displayed size: the output's aspect ratio, fitted to the container (or actual pixels).
   const ready = source?.id === photo.id;
   const crop = original ? DEFAULT_CROP : ignoreCrop ? { ...DEFAULT_CROP, angle: recipe.crop.angle } : recipe.crop;
@@ -119,6 +136,10 @@ export function DevelopCanvas({ photo, original = false, ignoreCrop = false, sca
 
   return (
     <div ref={containerRef} className={`${styles.container} ${scale === "actual" ? styles.actual : ""}`} onContextMenu={onContextMenu} data-photo-id={photo.id}>
+      {!ready && !error && placeholder?.id === photo.id && (
+        <img src={placeholder.url} alt="" aria-hidden className={styles.placeholder} draggable={false} />
+      )}
+      {!ready && !error && <span className={styles.loading}>Loading…</span>}
       {error && <p className={styles.message}>{error}</p>}
       <div className={styles.frame} style={{ width: display.width, height: display.height, visibility: ready && !error ? "visible" : "hidden" }}>
         <canvas ref={canvasRef} className={styles.canvas} role="img" aria-label={`${photo.fileName}${original ? " (before)" : ""}`} />

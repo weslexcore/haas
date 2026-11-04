@@ -169,7 +169,7 @@ export class BrowserPreviewService implements PreviewService {
     const exif = this.pool.run({ type: "index", file, mimeType: photo.mimeType ?? file.type }, { lane: "background" });
     if (!isRawMimeType(photo.mimeType)) return exif;
     // RAW: EXIF tags where exifr can read them; the size always from LibRaw (EXIF sizes there often describe a preview).
-    const [tags, info] = await Promise.all([exif.catch((): PhotoIndexData => ({})), this.raw.info(file).catch(() => null)]);
+    const [tags, info] = await Promise.all([exif.catch((): PhotoIndexData => ({})), this.raw.info(file, "background").catch(() => null)]);
     if (!info) return tags;
     const fromRaw: PhotoIndexData["exif"] = {
       make: info.make,
@@ -241,9 +241,14 @@ export class BrowserPreviewService implements PreviewService {
       const image = await this.rawImage(file, maxEdge, maxEdge).catch(() => null);
       if (image) return createImageBitmap(image.blob);
     }
-    // Half size is plenty when it still covers maxEdge.
-    const longEdge = Math.max(photo.width ?? 0, photo.height ?? 0);
-    const half = !!maxEdge && longEdge > 0 && longEdge / 2 >= maxEdge;
+    // Half size is plenty when it still covers maxEdge. Until the photo is indexed its size is
+    // unknown: ask LibRaw (cheap) rather than decode at full size, which takes ten times longer.
+    let longEdge = Math.max(photo.width ?? 0, photo.height ?? 0);
+    if (maxEdge && !longEdge) {
+      const info = await this.raw.info(file).catch(() => null);
+      longEdge = info ? Math.max(info.width, info.height) : 0;
+    }
+    const half = !!maxEdge && (longEdge === 0 || longEdge / 2 >= maxEdge);
     const pixels = await this.raw.decode(file, { half });
     if (!pixels) return null;
     return scaleBitmap(await createImageBitmap(pixels), maxEdge);

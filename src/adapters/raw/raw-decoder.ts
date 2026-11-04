@@ -75,31 +75,57 @@ function unavailable(): boolean {
   return reason !== null;
 }
 
-/** One LibRaw instance, used by one job at a time (open + reads must not interleave). */
+type Priority = "interactive" | "background";
+
+/**
+ * One LibRaw instance, used by one job at a time (open + reads must not
+ * interleave). Interactive jobs (what is on screen) run before background
+ * ones (indexing), newest first, so the photo the user just moved to never
+ * waits behind a queue of earlier requests.
+ */
 class Lane {
   private instance: LibRaw | null = null;
-  private tail: Promise<unknown> = Promise.resolve();
+  private interactive: Array<() => Promise<void>> = [];
+  private background: Array<() => Promise<void>> = [];
+  private running = false;
   private idle: ReturnType<typeof setTimeout> | undefined;
 
-  run<T>(job: (raw: LibRaw) => Promise<T>): Promise<T> {
-    const next = this.tail.then(async () => {
-      clearTimeout(this.idle);
-      if (!this.instance) {
-        const { default: LibRawClass } = await import("libraw-wasm");
-        this.instance = new LibRawClass();
-      }
-      try {
-        return await job(this.instance);
-      } catch (e) {
-        // A failed decode may leave the worker in a bad state (or out of memory): start fresh next time.
-        this.dispose();
-        throw e;
-      } finally {
-        this.idle = setTimeout(() => this.dispose(), IDLE_MS);
-      }
+  run<T>(job: (raw: LibRaw) => Promise<T>, priority: Priority = "interactive"): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      (priority === "background" ? this.background : this.interactive).push(() => this.exec(job).then(resolve, reject));
+      void this.pump();
     });
-    this.tail = next.catch(() => undefined);
-    return next;
+  }
+
+  private async pump(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      for (let next = this.next(); next; next = this.next()) await next();
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private next() {
+    return this.interactive.pop() ?? this.background.shift();
+  }
+
+  private async exec<T>(job: (raw: LibRaw) => Promise<T>): Promise<T> {
+    clearTimeout(this.idle);
+    if (!this.instance) {
+      const { default: LibRawClass } = await import("libraw-wasm");
+      this.instance = new LibRawClass();
+    }
+    try {
+      return await job(this.instance);
+    } catch (e) {
+      // A failed decode may leave the worker in a bad state (or out of memory): start fresh next time.
+      this.dispose();
+      throw e;
+    } finally {
+      this.idle = setTimeout(() => this.dispose(), IDLE_MS);
+    }
   }
 
   dispose(): void {
@@ -120,7 +146,8 @@ export class RawDecoder {
   /** Full decodes. */
   private readonly heavy = new Lane();
 
-  async info(file: Blob): Promise<RawInfo | null> {
+  /** Size, orientation and camera settings. `background` (indexing) yields to previews. */
+  async info(file: Blob, priority: Priority = "interactive"): Promise<RawInfo | null> {
     if (unavailable()) return null;
     const data = await bytesOf(file);
     return this.quick.run(async (raw) => {
@@ -136,7 +163,7 @@ export class RawDecoder {
       if (m.focal_len > 0) info.focalLength = single(m.focal_len);
       if (m.timestamp instanceof Date && m.timestamp.getTime() > 0) info.timestamp = m.timestamp;
       return info;
-    });
+    }, priority);
   }
 
   /** The camera's embedded JPEG preview, if it has one. */
