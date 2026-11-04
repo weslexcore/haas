@@ -13,15 +13,20 @@ const VIEWS: Array<{ view: ViewMode; label: string; icon: IconName }> = [
 
 export function TopBar() {
   const current = useAppState((s) => s.view);
+  const folder = useAppState((s) => s.library.folder);
   const paletteShortcut = useShortcut("app.palette.open");
 
   return (
     <header className={styles.bar}>
       <div className={styles.left}>
         <span className={styles.brand}>Photo</span>
-        <ActionButton actionId="library.folder.open" className={styles.folderButton}>
+        <ActionButton
+          actionId="library.folder.open"
+          className={styles.folderButton}
+          label={folder ? `Open Folder… (currently “${folder.name}”)` : undefined}
+        >
           <Icon name="folder" />
-          <span>Open Folder…</span>
+          <span className={styles.folderName}>{folder ? folder.name : "Open Folder…"}</span>
         </ActionButton>
       </div>
 

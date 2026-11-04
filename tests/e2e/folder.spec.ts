@@ -16,6 +16,8 @@ async function openShoot(page: Page) {
 test("opens a folder: thumbnails from a worker, EXIF, existing sidecars", async ({ page }) => {
   await openShoot(page);
   await expect(status(page)).toContainText("e2e-shoot");
+  // The header button now names the open folder.
+  await expect(page.getByRole("banner").getByRole("button", { name: "Open Folder…" })).toHaveText("e2e-shoot");
   await expect(status(page)).toContainText("4 photos");
 
   // Thumbnails are real decoded images.
