@@ -18,6 +18,7 @@ import { loadRecents } from "./palette/recents";
 import { toast } from "./toasts";
 import { syncUrlState } from "./url-state";
 import { syncAiThread } from "./ai/thread-sync";
+import { syncProfiles } from "./develop/profile-sync";
 
 declare global {
   interface Window {
@@ -75,6 +76,7 @@ export async function createBrowserRuntime(): Promise<Runtime> {
   await Promise.all([
     runtime.keybindings.load(),
     loadRecents(settings),
+    syncProfiles(runtime),
     theme ? runtime.dispatch("app.theme.set", { theme }) : null,
     autoAdvance ? runtime.dispatch("app.autoAdvance.set", { mode: autoAdvance }) : null,
   ]);

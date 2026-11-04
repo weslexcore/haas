@@ -5,6 +5,7 @@ import { developActions } from "./develop";
 import { historyActions } from "./history";
 import { libraryActions } from "./library";
 import { navigationActions } from "./navigation";
+import { profileActions } from "./profiles";
 import { shortcutActions } from "./shortcuts";
 import { trashActions } from "./trash";
 import { viewActions } from "./view";
@@ -18,6 +19,7 @@ export const allActions: readonly AnyAction[] = [
   ...libraryActions,
   ...trashActions,
   ...developActions,
+  ...profileActions,
   ...historyActions,
 ];
 

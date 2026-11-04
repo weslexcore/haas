@@ -1,3 +1,4 @@
+import { BUILTIN_PROFILES } from "../core/develop/profiles";
 import { choices, item, separator, submenu, type MenuDefinition, type MenuItem } from "../core/menus/registry";
 
 const culling: MenuItem[] = [
@@ -5,6 +6,19 @@ const culling: MenuItem[] = [
   submenu("Set Flag", choices("library.flag.set", "flag", ["pick", "reject", "none"])),
   submenu("Set Color Label", choices("library.colorLabel.set", "label", ["red", "yellow", "green", "blue", "purple", "none"])),
 ];
+
+const develop: MenuItem = submenu("Develop", [
+  item("develop.auto"),
+  item("develop.auto", { include: ["wb"] }),
+  submenu("Profile", [
+    ...BUILTIN_PROFILES.map((p) => item("develop.profile.set", { profileId: p.id }, p.name)),
+    separator,
+    item("develop.profile.set", { profileId: "none" }, "None"),
+  ]),
+  separator,
+  item("develop.settings.sync"),
+  item("develop.reset"),
+]);
 
 /** All context menus. Items are action references; see docs/adding-an-action.md. */
 export const allMenus: readonly MenuDefinition[] = [
@@ -14,6 +28,7 @@ export const allMenus: readonly MenuDefinition[] = [
     description: "Right-click on a photo in the grid or filmstrip. Acts on the selection (the clicked photo is selected first).",
     items: [
       ...culling,
+      develop,
       separator,
       item("view.set", { view: "loupe" }, "Open in Loupe"),
       item("view.set", { view: "develop" }, "Open in Develop"),
@@ -29,6 +44,7 @@ export const allMenus: readonly MenuDefinition[] = [
     description: "Right-click on the photo in Loupe or Develop.",
     items: [
       ...culling,
+      develop,
       separator,
       item("view.zoom.toggle"),
       item("view.info.toggle"),

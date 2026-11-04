@@ -1,4 +1,5 @@
 import { allActions } from "../../src/actions";
+import type { PixelData } from "../../src/core/develop/auto";
 import { MemoryMetadataStore } from "../../src/adapters/db";
 import { NullPreviewService } from "../../src/adapters/previews/preview-service";
 import { SampleSource } from "../../src/adapters/sample-source";
@@ -54,13 +55,32 @@ export class FakePreviews extends NullPreviewService implements PreviewService {
   override async decode() {
     return { width: 100, height: 50, close() {} } as unknown as ImageBitmap;
   }
+  /** Pixels for readPixels by photo id; others are flat mid-grey. Null makes a photo undecodable. */
+  pixels: Record<string, PixelData | null> = {};
   constructor(private readonly data: Record<string, PhotoIndexData> = {}) {
     super();
   }
   override async readIndexData(photo: PhotoRecord) {
     return this.data[photo.id] ?? {};
   }
+  override async readPixels(photo: PhotoRecord) {
+    return photo.id in this.pixels ? this.pixels[photo.id]! : solidImage(128, 128, 128);
+  }
 }
+
+/** A synthetic RGBA image: fill(x, y) gives 0–255 RGB at each pixel (x, y in 0–1). */
+export function makeImage(width: number, height: number, fill: (x: number, y: number) => [number, number, number]): PixelData {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const [r, g, b] = fill((x + 0.5) / width, (y + 0.5) / height);
+      data.set([r, g, b, 255], (y * width + x) * 4);
+    }
+  }
+  return { width, height, data };
+}
+
+export const solidImage = (r: number, g: number, b: number) => makeImage(16, 16, () => [r, g, b]);
 
 export interface TestRuntime extends Runtime {
   downloads: Array<{ fileName: string; content: string }>;

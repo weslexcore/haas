@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineAction, type AppContext } from "../core/actions/types";
 import { all, hasActivePhoto, hasSelection, inView, when } from "../core/actions/when";
+import { autoSettings, type AutoPart } from "../core/develop/auto";
 import { constrainCrop, cropForAspect, levelAngle } from "../core/develop/crop";
 import {
   GROUPS,
@@ -16,6 +17,7 @@ import {
   normalizeCurve,
   partialRecipeSchema,
   type EditRecipe,
+  type PartialRecipe,
   type SettingsGroup,
 } from "../core/develop/recipe";
 import { baseName } from "../core/library/formats";
@@ -23,9 +25,9 @@ import type { AppState, PhotoRecord } from "../core/state/types";
 import { targetIds } from "./context";
 
 /** Groups copied/pasted/synced by default (crop is per photo, as in Lightroom). */
-const DEFAULT_SYNC_GROUPS: SettingsGroup[] = ["wb", "basic", "presence", "effects", "toneCurve", "hsl"];
+const DEFAULT_SYNC_GROUPS: SettingsGroup[] = ["profile", "wb", "basic", "presence", "effects", "toneCurve", "hsl"];
 
-const photoIds = z
+export const photoIds = z
   .array(z.string())
   .min(1)
   .optional()
@@ -39,14 +41,21 @@ const groups = z
 
 export const editOf = (p: PhotoRecord | undefined): EditRecipe => p?.edit ?? defaultRecipe();
 
-/** Change the recipe of each target photo; unedited recipes are removed entirely. */
-function updateEdits(ctx: AppContext, ids: string[], change: (recipe: EditRecipe, photo: PhotoRecord) => EditRecipe): void {
+/**
+ * Change the recipe of each target photo; unedited recipes are removed entirely.
+ * `change` gets the committed (frozen) recipe, not an Immer draft: browsers'
+ * structuredClone can't copy a draft's Proxy.
+ */
+export function updateEdits(ctx: AppContext, ids: string[], change: (recipe: EditRecipe, photo: PhotoRecord) => EditRecipe): void {
+  const next = ids.map((id) => {
+    const photo = ctx.state.photos.byId[id]!;
+    return [id, change(editOf(photo), photo)] as const;
+  });
   ctx.update((s: AppState) => {
-    for (const id of ids) {
+    for (const [id, recipe] of next) {
       const photo = s.photos.byId[id]!;
-      const next = change(editOf(photo), photo);
-      if (isDefaultRecipe(next)) delete photo.edit;
-      else photo.edit = next;
+      if (isDefaultRecipe(recipe)) delete photo.edit;
+      else photo.edit = recipe;
     }
   });
 }
@@ -215,6 +224,77 @@ export const resetSettings = defineAction({
   defaultShortcuts: [{ keys: "mod+shift+r" }],
   run(p, ctx) {
     updateEdits(ctx, targetIds(ctx.state, p?.photoIds), (r) => (p?.groups ? mergeGroups(r, defaultRecipe(), p.groups) : defaultRecipe()));
+  },
+});
+
+// ── Auto ─────────────────────────────────────────────────────────────────
+
+/** Long edge of the pixels Auto analyses. */
+const AUTO_EDGE = 256;
+/** Photos analysed at once. */
+const AUTO_CONCURRENCY = 4;
+const AUTO_LABELS = { tone: "Auto Tone", wb: "Auto White Balance", both: "Auto Tone & White Balance" } as const;
+const autoLabel = (include?: readonly AutoPart[]) =>
+  !include || (include.length === 1 && include[0] === "tone") ? AUTO_LABELS.tone : include.length === 1 ? AUTO_LABELS.wb : AUTO_LABELS.both;
+
+export const auto = defineAction({
+  id: "develop.auto",
+  title: "Auto Tone",
+  description:
+    "Automatically set the selected photos' tone (exposure, contrast, highlights, shadows, whites, blacks, " +
+    "vibrance) and/or white balance (temperature, tint) from each photo's own pixels, inside its crop. Each " +
+    "photo is analysed separately and the result accounts for its profile and other settings, so apply a " +
+    "profile first. Tone replaces those sliders; nothing else changes. One undo step for all photos.",
+  category: "Develop",
+  kind: "command",
+  undoable: true,
+  when: hasSelection,
+  params: z
+    .object({
+      include: z
+        .array(z.enum(["tone", "wb"]))
+        .min(1)
+        .optional()
+        .describe("What to set: tone, wb (white balance), or both. Defaults to tone."),
+      photoIds,
+    })
+    .optional(),
+  examples: [
+    { params: {}, description: "Auto Tone on the selection." },
+    { params: { include: ["wb"] }, description: "Auto white balance only." },
+    { params: { include: ["wb", "tone"] }, description: "Both, for a batch of photos straight off the card." },
+  ],
+  defaultShortcuts: [
+    { keys: "mod+u" },
+    { keys: "mod+shift+u", params: { include: ["wb"] } },
+  ],
+  label: (p) => autoLabel(p?.include),
+  async run(p, ctx) {
+    const include = p?.include ?? ["tone"];
+    const ids = targetIds(ctx.state, p?.photoIds);
+    const settings = new Map<string, PartialRecipe>();
+    const failed: Array<{ photoId: string; error: string }> = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < ids.length) {
+        const id = ids[next++]!;
+        const photo = ctx.state.photos.byId[id]!;
+        try {
+          const pixels = await ctx.services.previews.readPixels(photo, { maxEdge: AUTO_EDGE });
+          if (!pixels) throw new Error("Can't decode this photo");
+          // Read the recipe now, not before the await, in case it changed meanwhile.
+          settings.set(id, autoSettings(pixels, editOf(ctx.state.photos.byId[id]), include));
+        } catch (e) {
+          failed.push({ photoId: id, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(AUTO_CONCURRENCY, ids.length) }, worker));
+    if (!settings.size) throw new Error(failed[0]?.error ?? "Nothing to adjust.");
+    // Skip any photo removed from the library while it was being analysed.
+    const done = [...settings.keys()].filter((id) => ctx.state.photos.byId[id]);
+    updateEdits(ctx, done, (r, photo) => applyPartial(r, settings.get(photo.id)!));
+    return { adjusted: settings.size, failed, settings: Object.fromEntries(settings) };
   },
 });
 
@@ -464,6 +544,7 @@ export const developActions = [
   applySettings,
   getSettings,
   resetSettings,
+  auto,
   copySettings,
   pasteSettings,
   syncSettings,

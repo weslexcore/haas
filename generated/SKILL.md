@@ -44,7 +44,11 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 **Views.** `grid` shows thumbnails for fast scanning, `loupe` shows the active photo large for close review, and `develop` shows the active photo with editing controls.
 
-**Edit recipes.** Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a post-crop vignette, a tone curve, HSL per colour band, and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited.
+**Edit recipes.** Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a post-crop vignette, a tone curve, HSL per colour band, and crop/straighten, plus an optional profile. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited.
+
+**Profiles.** A profile is a film look applied under the sliders (as in Lightroom): colour or black and white, per-channel curves, split toning, fade and grain, with an amount (0–200%). Applying one keeps the sliders. There are built-in profiles (ids `builtin.…`) and the user's own (`user.…`), which can be created, edited, deleted, and exported to or imported from JSON files. A photo's edit holds a copy of its profile's look, so it renders the same where that profile isn't installed.
+
+**Auto.** `develop.auto` sets tone (exposure, contrast, highlights, shadows, whites, blacks, vibrance) and/or white balance from each photo's own pixels, inside its crop, accounting for its profile. Each photo is analysed separately, so a batch gets individual settings in one undo step.
 
 **Undo and transactions.** Undoable commands are recorded in history. A transaction groups several commands into one undo step; AI-proposed plans are always applied as a single transaction after the user reviews them.
 
@@ -64,6 +68,22 @@ Keep the sharpest of several near-identical photos.
 Warm, slightly faded, less saturated, as one undoable step.
 
 1. `develop.settings.apply` `{"settings":{"temperature":20,"contrast":-10,"saturation":-20,"toneCurve":[[0,0.06],[0.5,0.52],[1,0.94]]}}`: Applies to every selected photo.
+
+### Give a set of photos a consistent look
+
+Apply one film profile to the selection, then correct each photo's exposure and white balance individually.
+
+1. `develop.profiles.list`: Choose a profile by its description (or the user's own).
+2. `develop.profile.set` `{"profileId":"builtin.warm-portrait"}`: Apply it to every selected photo.
+3. `develop.auto` `{"include":["wb","tone"]}`: Then Auto, so each photo is corrected under the profile.
+
+### Make a reusable profile
+
+Save a look as one of the user's own profiles and apply it.
+
+1. `develop.profiles.create` `{"name":"Moody Teal","from":"builtin.cool-cinema","look":{"fade":10,"grain":{"amount":20}}}`: Start from a built-in look and change some fields; returns the new id.
+2. `develop.profile.set` `{"profileId":"user.moody-teal"}`: Apply it with the returned id.
+3. `develop.profiles.export` `{"ids":["user.moody-teal"]}`: Optionally save it to a file to share.
 
 ### Edit one photo, then match the rest
 
@@ -796,6 +816,25 @@ Examples:
 - `{"setting":"temperature","value":25}`: Warm up the white balance.
 - `{"setting":"contrast","value":0}`: Reset contrast.
 
+#### Auto Tone: `develop.auto`
+
+Command, undoable · Shortcuts: `mod+u`, `mod+shift+u` → `{"include":["wb"]}`
+
+Automatically set the selected photos' tone (exposure, contrast, highlights, shadows, whites, blacks, vibrance) and/or white balance (temperature, tint) from each photo's own pixels, inside its crop. Each photo is analysed separately and the result accounts for its profile and other settings, so apply a profile first. Tone replaces those sliders; nothing else changes. One undo step for all photos.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `include` | `"tone"` \| `"wb"`[] | no | What to set: tone, wb (white balance), or both. Defaults to tone. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{}`: Auto Tone on the selection.
+- `{"include":["wb"]}`: Auto white balance only.
+- `{"include":["wb","tone"]}`: Both, for a batch of photos straight off the card.
+
 #### Straighten Along Line: `develop.crop.level`
 
 Command, undoable
@@ -902,6 +941,149 @@ Examples:
 - `{}`: Toggle the straighten tool.
 - `{"on":false}`: Disarm it.
 
+#### Set Profile: `develop.profile.set`
+
+Command, undoable
+
+Apply a profile (a film look under the sliders: colour or black and white, curves, toning, grain) to the selected photos, or "none" to remove it. The sliders are kept. amount is its strength in percent (0–200, default 100); amount alone changes the strength of each photo's current profile. Ids come from develop.profiles.list.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `profileId` | string | no | Profile id from develop.profiles.list, or "none" to remove the profile. |
+| `amount` | number (0–200) | no | Strength in percent, 0–200 (100 is the profile as designed). |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"profileId":"builtin.classic-bw"}`: Classic black and white.
+- `{"profileId":"builtin.faded-print","amount":60}`: A lighter faded-print look.
+- `{"amount":140}`: Strengthen each photo's current profile.
+- `{"profileId":"none"}`: Remove the profile.
+
+#### New Profile: `develop.profiles.create`
+
+Command, undoable
+
+Create one of the user's own profiles. It starts from another profile's look (from), else the active photo's current profile, else neutral; look then changes any fields. Returns the new id. Use develop.profile.set to apply it.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | yes | Name shown in the profile browser. |
+| `description` | string | no | What the look is like. |
+| `from` | string | no | Copy this profile's look (id). |
+| `look` | object | no | Look fields to change; anything omitted is kept. |
+
+Examples:
+
+- `{"name":"My Sepia","from":"builtin.sepia","look":{"fade":15}}`: A more faded copy of Sepia.
+- `{"name":"Teal Shadows","look":{"splitToning":{"shadowHue":185,"shadowSaturation":35},"fade":5}}`: A new look from scratch.
+
+#### Delete Profile: `develop.profiles.delete`
+
+Command, undoable
+
+Delete one of the user's own profiles. Photos that use it keep their look (each edit holds a copy of it). Undoable. Built-in profiles can't be deleted.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | Profile id, from develop.profiles.list. |
+
+Examples:
+
+- `{"id":"user.my-sepia"}`: Delete a profile.
+
+#### Export Profiles: `develop.profiles.export`
+
+Command
+
+Save profiles to a JSON file on the user's disk (a download) to back them up or share them; develop.profiles.import loads them back. Exports the given ids (built-in or the user's own), or all of the user's own profiles.
+
+*Available only when there are profiles to export.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `ids` | string[] | no | Profiles to export. Omit for all of your own. |
+
+Examples:
+
+- `{}`: Export all of your profiles.
+- `{"ids":["user.my-sepia"]}`: Export one profile to share.
+
+#### Get Profile: `develop.profiles.get`
+
+Query (no side effects)
+
+Return one profile's full definition (name, description, look), built-in or the user's own.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | Profile id, from develop.profiles.list. |
+
+Examples:
+
+- `{"id":"builtin.sepia"}`: The Sepia profile's settings.
+
+#### Import Profiles: `develop.profiles.import`
+
+Command, undoable
+
+Add the profiles in a profiles file (the parsed JSON written by develop.profiles.export) to the user's own. A profile identical to an existing one is skipped; one whose id is already used is added as a copy with a new name, unless replace is true, which overwrites it (and updates photos here that use it).
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `file` | object | yes | The contents of a profiles file (as exported). |
+| `replace` | boolean | no | Overwrite your profiles that have the same id instead of adding copies. |
+
+Examples:
+
+- `{"file":{"format":"photo-profiles","version":1,"profiles":[{"name":"Shared Look","look":{"curves":{"red":[[0,0],[1,1]],"green":[[0,0],[1,1]],"blue":[[0,0],[1,1]]},"monochrome":null,"saturation":0,"fade":10,"splitToning":{"shadowHue":0,"shadowSaturation":0,"highlightHue":0,"highlightSaturation":0,"balance":0},"grain":{"amount":0,"size":25}}}]}}`: Import a profile.
+
+#### List Profiles: `develop.profiles.list`
+
+Query (no side effects)
+
+List the available profiles: built-in film looks and the user's own, with id, name, group (color or bw), description, and how many photos in this folder use each. Pass includeLooks for their full settings.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `includeLooks` | boolean | no | Include each profile's look (curves, toning, grain…). |
+
+Examples:
+
+- `{}`: All profiles.
+
+#### Edit Profile: `develop.profiles.update`
+
+Command, undoable
+
+Change one of the user's own profiles: rename it, change its description, or change look fields. Photos in this folder that use it are updated too (photos elsewhere keep the look they were given until it is applied again). Built-in profiles can't be changed.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | Profile id, from develop.profiles.list. |
+| `name` | string | no | New name. |
+| `description` | string | no | New description. |
+| `look` | object | no | Look fields to change; anything omitted is kept. |
+
+Examples:
+
+- `{"id":"user.my-sepia","name":"Warm Sepia"}`: Rename a profile.
+- `{"id":"user.my-sepia","look":{"grain":{"amount":30}}}`: More grain.
+
 #### Reset Develop Settings: `develop.reset`
 
 Command, undoable · Shortcuts: `mod+shift+r`
@@ -912,7 +1094,7 @@ Reset the selected photos' develop settings to unedited, or only the given group
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Only these groups (wb, basic, presence, effects, toneCurve, hsl, crop). Omit for all. |
+| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Only these groups (profile, wb, basic, presence, effects, toneCurve, hsl, crop). Omit for all. |
 | `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
 
 Examples:
@@ -948,7 +1130,7 @@ Copy the active photo's develop settings (by default everything except crop) to 
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop. |
+| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: profile, wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop. |
 
 Examples:
 
@@ -997,7 +1179,7 @@ Copy the active photo's develop settings to every other selected photo (by defau
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop. |
+| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: profile, wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop. |
 
 Examples:
 
@@ -1066,6 +1248,26 @@ Right-click on a photo in the grid or filmstrip. Acts on the selection (the clic
   - Label Blue: `library.colorLabel.set` `{"label":"blue"}`
   - Label Purple: `library.colorLabel.set` `{"label":"purple"}`
   - Remove Color Label: `library.colorLabel.set` `{"label":"none"}`
+- Develop
+  - Auto Tone: `develop.auto`
+  - Auto White Balance: `develop.auto` `{"include":["wb"]}`
+  - Profile
+    - Warm Portrait: `develop.profile.set` `{"profileId":"builtin.warm-portrait"}`
+    - Vivid Slide: `develop.profile.set` `{"profileId":"builtin.vivid-slide"}`
+    - Golden Hour: `develop.profile.set` `{"profileId":"builtin.golden-hour"}`
+    - Faded Print: `develop.profile.set` `{"profileId":"builtin.faded-print"}`
+    - Matte: `develop.profile.set` `{"profileId":"builtin.matte"}`
+    - Cool Cinema: `develop.profile.set` `{"profileId":"builtin.cool-cinema"}`
+    - Soft Pastel: `develop.profile.set` `{"profileId":"builtin.soft-pastel"}`
+    - Cross Process: `develop.profile.set` `{"profileId":"builtin.cross-process"}`
+    - Classic B&W: `develop.profile.set` `{"profileId":"builtin.classic-bw"}`
+    - High Contrast B&W: `develop.profile.set` `{"profileId":"builtin.high-contrast-bw"}`
+    - Soft B&W: `develop.profile.set` `{"profileId":"builtin.soft-bw"}`
+    - Selenium: `develop.profile.set` `{"profileId":"builtin.selenium"}`
+    - Sepia: `develop.profile.set` `{"profileId":"builtin.sepia"}`
+    - None: `develop.profile.set` `{"profileId":"none"}`
+  - Sync Settings: `develop.settings.sync`
+  - Reset Develop Settings: `develop.reset`
 - Open in Loupe: `view.set` `{"view":"loupe"}`
 - Open in Develop: `view.set` `{"view":"develop"}`
 - Select All: `library.selection.all`
@@ -1093,6 +1295,26 @@ Right-click on the photo in Loupe or Develop.
   - Label Blue: `library.colorLabel.set` `{"label":"blue"}`
   - Label Purple: `library.colorLabel.set` `{"label":"purple"}`
   - Remove Color Label: `library.colorLabel.set` `{"label":"none"}`
+- Develop
+  - Auto Tone: `develop.auto`
+  - Auto White Balance: `develop.auto` `{"include":["wb"]}`
+  - Profile
+    - Warm Portrait: `develop.profile.set` `{"profileId":"builtin.warm-portrait"}`
+    - Vivid Slide: `develop.profile.set` `{"profileId":"builtin.vivid-slide"}`
+    - Golden Hour: `develop.profile.set` `{"profileId":"builtin.golden-hour"}`
+    - Faded Print: `develop.profile.set` `{"profileId":"builtin.faded-print"}`
+    - Matte: `develop.profile.set` `{"profileId":"builtin.matte"}`
+    - Cool Cinema: `develop.profile.set` `{"profileId":"builtin.cool-cinema"}`
+    - Soft Pastel: `develop.profile.set` `{"profileId":"builtin.soft-pastel"}`
+    - Cross Process: `develop.profile.set` `{"profileId":"builtin.cross-process"}`
+    - Classic B&W: `develop.profile.set` `{"profileId":"builtin.classic-bw"}`
+    - High Contrast B&W: `develop.profile.set` `{"profileId":"builtin.high-contrast-bw"}`
+    - Soft B&W: `develop.profile.set` `{"profileId":"builtin.soft-bw"}`
+    - Selenium: `develop.profile.set` `{"profileId":"builtin.selenium"}`
+    - Sepia: `develop.profile.set` `{"profileId":"builtin.sepia"}`
+    - None: `develop.profile.set` `{"profileId":"none"}`
+  - Sync Settings: `develop.settings.sync`
+  - Reset Develop Settings: `develop.reset`
 - Toggle Zoom: `view.zoom.toggle`
 - Toggle Info Overlay: `view.info.toggle`
 - Toggle Filmstrip: `view.filmstrip.toggle`

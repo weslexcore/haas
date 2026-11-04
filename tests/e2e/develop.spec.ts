@@ -188,7 +188,78 @@ test.describe("develop (sample library)", () => {
     await expect(c).toBeVisible();
     await expect.poll(() => c.evaluate((el) => (el instanceof HTMLCanvasElement ? el.width / el.height : 0))).toBeCloseTo(1, 2);
   });
+
+  test("profiles: browse and apply, make your own, export, delete, import, and they persist", async ({ page }) => {
+    const panel = page.getByRole("complementary", { name: "Develop controls" });
+    const before = await chroma(canvas(page));
+    await panel.getByRole("button", { name: "Browse" }).click();
+    await panel.getByRole("group", { name: "Black & White profiles" }).getByRole("button", { name: "Classic B&W" }).click();
+    await expect.poll(() => chroma(canvas(page))).toBeLessThan(Math.max(2, before / 10));
+    await expect(status(page)).toContainText("Last change: Profile: Classic B&W");
+    await expect(panel.getByRole("slider", { name: "Amount" })).toHaveValue("100");
+
+    // Your own: a copy of the current profile, edited and renamed.
+    await panel.getByRole("button", { name: "Duplicate" }).click();
+    const editor = panel.getByRole("group", { name: /Edit profile/ });
+    await expect(editor.getByLabel("Name")).toHaveValue("Classic B&W copy");
+    await editor.getByLabel("Name").fill("Grainy Mono");
+    await editor.getByLabel("Name").press("Enter");
+    const grain = editor.locator("#profile-grain");
+    await grain.focus();
+    for (let i = 0; i < 10; i++) await page.keyboard.press("ArrowRight");
+    const yours = panel.getByRole("group", { name: "Yours profiles" });
+    await expect(yours.getByRole("button", { name: "Grainy Mono" })).toHaveAttribute("aria-pressed", "true");
+
+    const download = page.waitForEvent("download");
+    await editor.getByRole("button", { name: "Export" }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toBe("grainy-mono.profile.json");
+    const contents = JSON.parse(await (await file.createReadStream()).toArray().then((c) => Buffer.concat(c).toString("utf8")));
+    expect(contents).toMatchObject({ format: "photo-profiles", version: 1, profiles: [{ id: "user.classic-b-w-copy", name: "Grainy Mono", look: { grain: { amount: 25 } } }] });
+
+    await editor.getByRole("button", { name: "Delete" }).click();
+    await expect(yours.getByRole("button", { name: "Grainy Mono" })).toHaveCount(0);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(yours.getByRole("button", { name: "Grainy Mono" })).toBeVisible();
+
+    // Import a shared file: same id but a different look, so it comes in as a copy.
+    contents.profiles[0].look.fade = 30;
+    await panel.locator('input[type="file"]').setInputFiles({ name: "shared.profile.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(contents)) });
+    await expect(page.getByText("Imported shared.profile.json: 1 added.")).toBeVisible();
+    await expect(yours.getByRole("button", { name: "Grainy Mono 2" })).toBeVisible();
+
+    // Saved locally: still there after a reload.
+    await page.waitForTimeout(400);
+    await page.reload();
+    // The URL reopens the sample library in Develop.
+    await page.getByRole("complementary", { name: "Develop controls" }).getByRole("button", { name: "Browse" }).click();
+    await expect(page.getByRole("group", { name: "Yours profiles" }).getByRole("button")).toHaveText(["Grainy Mono", "Grainy Mono 2"]);
+  });
+
+  test("Auto corrects a badly exposed photo, as one undo step", async ({ page }) => {
+    await page.evaluate(() => window.photo!.dispatch("develop.adjust", { setting: "exposure", value: -2.5 }));
+    const dark = await settled(canvas(page));
+    await page.getByRole("complementary", { name: "Develop controls" }).getByRole("button", { name: /^Auto/ }).first().click();
+    await expect(status(page)).toContainText("Last change: Auto Tone");
+    await expect.poll(() => settled(canvas(page))).toBeGreaterThan(dark + 20);
+    const exposure = Number(await page.getByRole("slider", { name: "Exposure" }).inputValue());
+    expect(Math.abs(exposure)).toBeLessThan(2.5);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(page.getByRole("slider", { name: "Exposure" })).toHaveValue("-2.5");
+  });
 });
+
+/** Mean colourfulness (max − min channel, 0–255) of a rendered canvas. */
+async function chroma(c: Locator): Promise<number> {
+  return c.evaluate((el: HTMLCanvasElement) => {
+    const ctx = new OffscreenCanvas(el.width, el.height).getContext("2d")!;
+    ctx.drawImage(el, 0, 0);
+    const d = ctx.getImageData(0, 0, el.width, el.height).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += Math.max(d[i]!, d[i + 1]!, d[i + 2]!) - Math.min(d[i]!, d[i + 1]!, d[i + 2]!);
+    return sum / (d.length / 4);
+  });
+}
 
 test.describe("develop with real files", () => {
   async function openShoot(page: Page) {

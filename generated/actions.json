@@ -66,7 +66,15 @@
     },
     {
       "term": "Edit recipes",
-      "explanation": "Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a post-crop vignette, a tone curve, HSL per colour band, and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited."
+      "explanation": "Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a post-crop vignette, a tone curve, HSL per colour band, and crop/straighten, plus an optional profile. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited."
+    },
+    {
+      "term": "Profiles",
+      "explanation": "A profile is a film look applied under the sliders (as in Lightroom): colour or black and white, per-channel curves, split toning, fade and grain, with an amount (0–200%). Applying one keeps the sliders. There are built-in profiles (ids `builtin.…`) and the user's own (`user.…`), which can be created, edited, deleted, and exported to or imported from JSON files. A photo's edit holds a copy of its profile's look, so it renders the same where that profile isn't installed."
+    },
+    {
+      "term": "Auto",
+      "explanation": "`develop.auto` sets tone (exposure, contrast, highlights, shadows, whites, blacks, vibrance) and/or white balance from each photo's own pixels, inside its crop, accounting for its profile. Each photo is analysed separately, so a batch gets individual settings in one undo step."
     },
     {
       "term": "Undo and transactions",
@@ -149,6 +157,69 @@
             }
           },
           "note": "Applies to every selected photo."
+        }
+      ]
+    },
+    {
+      "title": "Give a set of photos a consistent look",
+      "goal": "Apply one film profile to the selection, then correct each photo's exposure and white balance individually.",
+      "steps": [
+        {
+          "actionId": "develop.profiles.list",
+          "note": "Choose a profile by its description (or the user's own)."
+        },
+        {
+          "actionId": "develop.profile.set",
+          "params": {
+            "profileId": "builtin.warm-portrait"
+          },
+          "note": "Apply it to every selected photo."
+        },
+        {
+          "actionId": "develop.auto",
+          "params": {
+            "include": [
+              "wb",
+              "tone"
+            ]
+          },
+          "note": "Then Auto, so each photo is corrected under the profile."
+        }
+      ]
+    },
+    {
+      "title": "Make a reusable profile",
+      "goal": "Save a look as one of the user's own profiles and apply it.",
+      "steps": [
+        {
+          "actionId": "develop.profiles.create",
+          "params": {
+            "name": "Moody Teal",
+            "from": "builtin.cool-cinema",
+            "look": {
+              "fade": 10,
+              "grain": {
+                "amount": 20
+              }
+            }
+          },
+          "note": "Start from a built-in look and change some fields; returns the new id."
+        },
+        {
+          "actionId": "develop.profile.set",
+          "params": {
+            "profileId": "user.moody-teal"
+          },
+          "note": "Apply it with the returned id."
+        },
+        {
+          "actionId": "develop.profiles.export",
+          "params": {
+            "ids": [
+              "user.moody-teal"
+            ]
+          },
+          "note": "Optionally save it to a file to share."
         }
       ]
     },
@@ -2005,6 +2076,76 @@
       "availability": "Available only when at least one photo is selected."
     },
     {
+      "id": "develop.auto",
+      "title": "Auto Tone",
+      "description": "Automatically set the selected photos' tone (exposure, contrast, highlights, shadows, whites, blacks, vibrance) and/or white balance (temperature, tint) from each photo's own pixels, inside its crop. Each photo is analysed separately and the result accounts for its profile and other settings, so apply a profile first. Tone replaces those sliders; nothing else changes. One undo step for all photos.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "include": {
+            "description": "What to set: tone, wb (white balance), or both. Defaults to tone.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "tone",
+                "wb"
+              ]
+            }
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Auto Tone on the selection."
+        },
+        {
+          "params": {
+            "include": [
+              "wb"
+            ]
+          },
+          "description": "Auto white balance only."
+        },
+        {
+          "params": {
+            "include": [
+              "wb",
+              "tone"
+            ]
+          },
+          "description": "Both, for a batch of photos straight off the card."
+        }
+      ],
+      "defaultShortcuts": [
+        {
+          "keys": "mod+u"
+        },
+        {
+          "keys": "mod+shift+u",
+          "params": {
+            "include": [
+              "wb"
+            ]
+          }
+        }
+      ],
+      "availability": "Available only when at least one photo is selected."
+    },
+    {
       "id": "develop.crop.level",
       "title": "Straighten Along Line",
       "description": "Straighten the active photo so a line along a horizon or vertical edge becomes level (horizontal, or vertical when the line is closer to vertical). from/to are fractions (0–1, y down) of the uncropped photo as currently straightened; with no straighten angle yet, that is the original photo. The crop is kept inside the rotated photo.",
@@ -2351,6 +2492,1042 @@
       "availability": "Available only when the current view is Loupe or Develop and a photo is active."
     },
     {
+      "id": "develop.profile.set",
+      "title": "Set Profile",
+      "description": "Apply a profile (a film look under the sliders: colour or black and white, curves, toning, grain) to the selected photos, or \"none\" to remove it. The sliders are kept. amount is its strength in percent (0–200, default 100); amount alone changes the strength of each photo's current profile. Ids come from develop.profiles.list.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "profileId": {
+            "description": "Profile id from develop.profiles.list, or \"none\" to remove the profile.",
+            "type": "string",
+            "minLength": 1
+          },
+          "amount": {
+            "description": "Strength in percent, 0–200 (100 is the profile as designed).",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "photoIds": {
+            "description": "Photos to change. Omit to use the current selection.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {
+            "profileId": "builtin.classic-bw"
+          },
+          "description": "Classic black and white."
+        },
+        {
+          "params": {
+            "profileId": "builtin.faded-print",
+            "amount": 60
+          },
+          "description": "A lighter faded-print look."
+        },
+        {
+          "params": {
+            "amount": 140
+          },
+          "description": "Strengthen each photo's current profile."
+        },
+        {
+          "params": {
+            "profileId": "none"
+          },
+          "description": "Remove the profile."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when at least one photo is selected."
+    },
+    {
+      "id": "develop.profiles.create",
+      "title": "New Profile",
+      "description": "Create one of the user's own profiles. It starts from another profile's look (from), else the active photo's current profile, else neutral; look then changes any fields. Returns the new id. Use develop.profile.set to apply it.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "Name shown in the profile browser."
+          },
+          "description": {
+            "description": "What the look is like.",
+            "type": "string",
+            "maxLength": 300
+          },
+          "from": {
+            "description": "Copy this profile's look (id).",
+            "type": "string",
+            "minLength": 1
+          },
+          "look": {
+            "type": "object",
+            "properties": {
+              "curves": {
+                "description": "Channel curves to replace (red, green, blue): control points [input, output] in 0–1.",
+                "type": "object",
+                "properties": {
+                  "red": {
+                    "minItems": 2,
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  },
+                  "green": {
+                    "minItems": 2,
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  },
+                  "blue": {
+                    "minItems": 2,
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  }
+                }
+              },
+              "monochrome": {
+                "description": "Black and white channel mix in percent (red, green, blue), or null to make the look colour.",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "red": {
+                        "type": "number",
+                        "minimum": -200,
+                        "maximum": 200
+                      },
+                      "green": {
+                        "type": "number",
+                        "minimum": -200,
+                        "maximum": 200
+                      },
+                      "blue": {
+                        "type": "number",
+                        "minimum": -200,
+                        "maximum": 200
+                      }
+                    },
+                    "required": [
+                      "red",
+                      "green",
+                      "blue"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "saturation": {
+                "description": "Saturation, -100 to 100.",
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "fade": {
+                "description": "Faded blacks, 0 to 100.",
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "splitToning": {
+                "description": "Split toning fields to change: hues in degrees, saturations 0–100, balance -100 to 100.",
+                "type": "object",
+                "properties": {
+                  "shadowHue": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 360
+                  },
+                  "shadowSaturation": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "highlightHue": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 360
+                  },
+                  "highlightSaturation": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "balance": {
+                    "type": "number",
+                    "minimum": -100,
+                    "maximum": 100
+                  }
+                }
+              },
+              "grain": {
+                "description": "Grain amount and size, 0–100.",
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              }
+            },
+            "description": "Look fields to change; anything omitted is kept."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "name": "My Sepia",
+            "from": "builtin.sepia",
+            "look": {
+              "fade": 15
+            }
+          },
+          "description": "A more faded copy of Sepia."
+        },
+        {
+          "params": {
+            "name": "Teal Shadows",
+            "look": {
+              "splitToning": {
+                "shadowHue": 185,
+                "shadowSaturation": 35
+              },
+              "fade": 5
+            }
+          },
+          "description": "A new look from scratch."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "develop.profiles.delete",
+      "title": "Delete Profile",
+      "description": "Delete one of the user's own profiles. Photos that use it keep their look (each edit holds a copy of it). Undoable. Built-in profiles can't be deleted.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Profile id, from develop.profiles.list."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "id": "user.my-sepia"
+          },
+          "description": "Delete a profile."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "develop.profiles.export",
+      "title": "Export Profiles",
+      "description": "Save profiles to a JSON file on the user's disk (a download) to back them up or share them; develop.profiles.import loads them back. Exports the given ids (built-in or the user's own), or all of the user's own profiles.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "Profiles to export. Omit for all of your own.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Export all of your profiles."
+        },
+        {
+          "params": {
+            "ids": [
+              "user.my-sepia"
+            ]
+          },
+          "description": "Export one profile to share."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when there are profiles to export."
+    },
+    {
+      "id": "develop.profiles.get",
+      "title": "Get Profile",
+      "description": "Return one profile's full definition (name, description, look), built-in or the user's own.",
+      "category": "Develop",
+      "kind": "query",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Profile id, from develop.profiles.list."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "id": "builtin.sepia"
+          },
+          "description": "The Sepia profile's settings."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "develop.profiles.import",
+      "title": "Import Profiles",
+      "description": "Add the profiles in a profiles file (the parsed JSON written by develop.profiles.export) to the user's own. A profile identical to an existing one is skipped; one whose id is already used is added as a copy with a new name, unless replace is true, which overwrites it (and updates photos here that use it).",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "const": "photo-profiles",
+                "description": "Always \"photo-profiles\"."
+              },
+              "version": {
+                "type": "number",
+                "const": 1,
+                "description": "File format version, 1."
+              },
+              "profiles": {
+                "minItems": 1,
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60
+                    },
+                    "description": {
+                      "type": "string",
+                      "maxLength": 300
+                    },
+                    "look": {
+                      "type": "object",
+                      "properties": {
+                        "curves": {
+                          "default": {
+                            "red": [
+                              [
+                                0,
+                                0
+                              ],
+                              [
+                                1,
+                                1
+                              ]
+                            ],
+                            "green": [
+                              [
+                                0,
+                                0
+                              ],
+                              [
+                                1,
+                                1
+                              ]
+                            ],
+                            "blue": [
+                              [
+                                0,
+                                0
+                              ],
+                              [
+                                1,
+                                1
+                              ]
+                            ]
+                          },
+                          "description": "Red, green and blue curves: control points [input, output] in 0–1.",
+                          "type": "object",
+                          "properties": {
+                            "red": {
+                              "default": [
+                                [
+                                  0,
+                                  0
+                                ],
+                                [
+                                  1,
+                                  1
+                                ]
+                              ],
+                              "minItems": 2,
+                              "maxItems": 16,
+                              "type": "array",
+                              "items": {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  }
+                                ],
+                                "items": false,
+                                "minItems": 2,
+                                "maxItems": 2
+                              }
+                            },
+                            "green": {
+                              "default": [
+                                [
+                                  0,
+                                  0
+                                ],
+                                [
+                                  1,
+                                  1
+                                ]
+                              ],
+                              "minItems": 2,
+                              "maxItems": 16,
+                              "type": "array",
+                              "items": {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  }
+                                ],
+                                "items": false,
+                                "minItems": 2,
+                                "maxItems": 2
+                              }
+                            },
+                            "blue": {
+                              "default": [
+                                [
+                                  0,
+                                  0
+                                ],
+                                [
+                                  1,
+                                  1
+                                ]
+                              ],
+                              "minItems": 2,
+                              "maxItems": 16,
+                              "type": "array",
+                              "items": {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  }
+                                ],
+                                "items": false,
+                                "minItems": 2,
+                                "maxItems": 2
+                              }
+                            }
+                          }
+                        },
+                        "monochrome": {
+                          "default": null,
+                          "description": "Black and white channel mix in percent (e.g. 30/59/11 neutral, high red darkens skies); null for colour.",
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "red": {
+                                  "type": "number",
+                                  "minimum": -200,
+                                  "maximum": 200
+                                },
+                                "green": {
+                                  "type": "number",
+                                  "minimum": -200,
+                                  "maximum": 200
+                                },
+                                "blue": {
+                                  "type": "number",
+                                  "minimum": -200,
+                                  "maximum": 200
+                                }
+                              },
+                              "required": [
+                                "red",
+                                "green",
+                                "blue"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "saturation": {
+                          "default": 0,
+                          "description": "Overall saturation of the look, -100 to 100.",
+                          "type": "number",
+                          "minimum": -100,
+                          "maximum": 100
+                        },
+                        "fade": {
+                          "default": 0,
+                          "description": "Lifts the blacks for a faded print, 0 to 100.",
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "splitToning": {
+                          "default": {
+                            "shadowHue": 0,
+                            "shadowSaturation": 0,
+                            "highlightHue": 0,
+                            "highlightSaturation": 0,
+                            "balance": 0
+                          },
+                          "description": "Tints shadows and highlights: hues in degrees, saturation 0 to 100, balance -100 (shadows) to 100 (highlights).",
+                          "type": "object",
+                          "properties": {
+                            "shadowHue": {
+                              "default": 0,
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 360
+                            },
+                            "shadowSaturation": {
+                              "default": 0,
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "highlightHue": {
+                              "default": 0,
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 360
+                            },
+                            "highlightSaturation": {
+                              "default": 0,
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "balance": {
+                              "default": 0,
+                              "type": "number",
+                              "minimum": -100,
+                              "maximum": 100
+                            }
+                          }
+                        },
+                        "grain": {
+                          "default": {
+                            "amount": 0,
+                            "size": 25
+                          },
+                          "description": "Film grain: amount 0 to 100, size 0 (fine) to 100 (coarse).",
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "default": 0,
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "size": {
+                              "default": 25,
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "look"
+                  ]
+                },
+                "description": "Profiles: name, optional id and description, and look."
+              }
+            },
+            "required": [
+              "format",
+              "version",
+              "profiles"
+            ],
+            "description": "The contents of a profiles file (as exported)."
+          },
+          "replace": {
+            "description": "Overwrite your profiles that have the same id instead of adding copies.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "file": {
+              "format": "photo-profiles",
+              "version": 1,
+              "profiles": [
+                {
+                  "name": "Shared Look",
+                  "look": {
+                    "curves": {
+                      "red": [
+                        [
+                          0,
+                          0
+                        ],
+                        [
+                          1,
+                          1
+                        ]
+                      ],
+                      "green": [
+                        [
+                          0,
+                          0
+                        ],
+                        [
+                          1,
+                          1
+                        ]
+                      ],
+                      "blue": [
+                        [
+                          0,
+                          0
+                        ],
+                        [
+                          1,
+                          1
+                        ]
+                      ]
+                    },
+                    "monochrome": null,
+                    "saturation": 0,
+                    "fade": 10,
+                    "splitToning": {
+                      "shadowHue": 0,
+                      "shadowSaturation": 0,
+                      "highlightHue": 0,
+                      "highlightSaturation": 0,
+                      "balance": 0
+                    },
+                    "grain": {
+                      "amount": 0,
+                      "size": 25
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "Import a profile."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "develop.profiles.list",
+      "title": "List Profiles",
+      "description": "List the available profiles: built-in film looks and the user's own, with id, name, group (color or bw), description, and how many photos in this folder use each. Pass includeLooks for their full settings.",
+      "category": "Develop",
+      "kind": "query",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "includeLooks": {
+            "description": "Include each profile's look (curves, toning, grain…).",
+            "type": "boolean"
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "All profiles."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "develop.profiles.update",
+      "title": "Edit Profile",
+      "description": "Change one of the user's own profiles: rename it, change its description, or change look fields. Photos in this folder that use it are updated too (photos elsewhere keep the look they were given until it is applied again). Built-in profiles can't be changed.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Profile id, from develop.profiles.list."
+          },
+          "name": {
+            "description": "New name.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "description": {
+            "description": "New description.",
+            "type": "string",
+            "maxLength": 300
+          },
+          "look": {
+            "type": "object",
+            "properties": {
+              "curves": {
+                "description": "Channel curves to replace (red, green, blue): control points [input, output] in 0–1.",
+                "type": "object",
+                "properties": {
+                  "red": {
+                    "minItems": 2,
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  },
+                  "green": {
+                    "minItems": 2,
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  },
+                  "blue": {
+                    "minItems": 2,
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  }
+                }
+              },
+              "monochrome": {
+                "description": "Black and white channel mix in percent (red, green, blue), or null to make the look colour.",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "red": {
+                        "type": "number",
+                        "minimum": -200,
+                        "maximum": 200
+                      },
+                      "green": {
+                        "type": "number",
+                        "minimum": -200,
+                        "maximum": 200
+                      },
+                      "blue": {
+                        "type": "number",
+                        "minimum": -200,
+                        "maximum": 200
+                      }
+                    },
+                    "required": [
+                      "red",
+                      "green",
+                      "blue"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "saturation": {
+                "description": "Saturation, -100 to 100.",
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "fade": {
+                "description": "Faded blacks, 0 to 100.",
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "splitToning": {
+                "description": "Split toning fields to change: hues in degrees, saturations 0–100, balance -100 to 100.",
+                "type": "object",
+                "properties": {
+                  "shadowHue": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 360
+                  },
+                  "shadowSaturation": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "highlightHue": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 360
+                  },
+                  "highlightSaturation": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "balance": {
+                    "type": "number",
+                    "minimum": -100,
+                    "maximum": 100
+                  }
+                }
+              },
+              "grain": {
+                "description": "Grain amount and size, 0–100.",
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              }
+            },
+            "description": "Look fields to change; anything omitted is kept."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "id": "user.my-sepia",
+            "name": "Warm Sepia"
+          },
+          "description": "Rename a profile."
+        },
+        {
+          "params": {
+            "id": "user.my-sepia",
+            "look": {
+              "grain": {
+                "amount": 30
+              }
+            }
+          },
+          "description": "More grain."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
       "id": "develop.reset",
       "title": "Reset Develop Settings",
       "description": "Reset the selected photos' develop settings to unedited, or only the given groups.",
@@ -2361,12 +3538,13 @@
         "type": "object",
         "properties": {
           "groups": {
-            "description": "Only these groups (wb, basic, presence, effects, toneCurve, hsl, crop). Omit for all.",
+            "description": "Only these groups (profile, wb, basic, presence, effects, toneCurve, hsl, crop). Omit for all.",
             "minItems": 1,
             "type": "array",
             "items": {
               "type": "string",
               "enum": [
+                "profile",
                 "wb",
                 "basic",
                 "presence",
@@ -2747,12 +3925,13 @@
         "type": "object",
         "properties": {
           "groups": {
-            "description": "Settings groups: wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop.",
+            "description": "Settings groups: profile, wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop.",
             "minItems": 1,
             "type": "array",
             "items": {
               "type": "string",
               "enum": [
+                "profile",
                 "wb",
                 "basic",
                 "presence",
@@ -2856,12 +4035,13 @@
         "type": "object",
         "properties": {
           "groups": {
-            "description": "Settings groups: wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop.",
+            "description": "Settings groups: profile, wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop.",
             "minItems": 1,
             "type": "array",
             "items": {
               "type": "string",
               "enum": [
+                "profile",
                 "wb",
                 "basic",
                 "presence",
@@ -3163,6 +4343,161 @@
           ]
         },
         {
+          "kind": "submenu",
+          "label": "Develop",
+          "items": [
+            {
+              "kind": "action",
+              "actionId": "develop.auto",
+              "label": "Auto Tone"
+            },
+            {
+              "kind": "action",
+              "actionId": "develop.auto",
+              "params": {
+                "include": [
+                  "wb"
+                ]
+              },
+              "label": "Auto White Balance"
+            },
+            {
+              "kind": "submenu",
+              "label": "Profile",
+              "items": [
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.warm-portrait"
+                  },
+                  "label": "Warm Portrait"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.vivid-slide"
+                  },
+                  "label": "Vivid Slide"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.golden-hour"
+                  },
+                  "label": "Golden Hour"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.faded-print"
+                  },
+                  "label": "Faded Print"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.matte"
+                  },
+                  "label": "Matte"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.cool-cinema"
+                  },
+                  "label": "Cool Cinema"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.soft-pastel"
+                  },
+                  "label": "Soft Pastel"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.cross-process"
+                  },
+                  "label": "Cross Process"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.classic-bw"
+                  },
+                  "label": "Classic B&W"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.high-contrast-bw"
+                  },
+                  "label": "High Contrast B&W"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.soft-bw"
+                  },
+                  "label": "Soft B&W"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.selenium"
+                  },
+                  "label": "Selenium"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.sepia"
+                  },
+                  "label": "Sepia"
+                },
+                {
+                  "kind": "separator"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "none"
+                  },
+                  "label": "None"
+                }
+              ]
+            },
+            {
+              "kind": "separator"
+            },
+            {
+              "kind": "action",
+              "actionId": "develop.settings.sync",
+              "label": "Sync Settings"
+            },
+            {
+              "kind": "action",
+              "actionId": "develop.reset",
+              "label": "Reset Develop Settings"
+            }
+          ]
+        },
+        {
           "kind": "separator"
         },
         {
@@ -3339,6 +4674,161 @@
                 "label": "none"
               },
               "label": "Remove Color Label"
+            }
+          ]
+        },
+        {
+          "kind": "submenu",
+          "label": "Develop",
+          "items": [
+            {
+              "kind": "action",
+              "actionId": "develop.auto",
+              "label": "Auto Tone"
+            },
+            {
+              "kind": "action",
+              "actionId": "develop.auto",
+              "params": {
+                "include": [
+                  "wb"
+                ]
+              },
+              "label": "Auto White Balance"
+            },
+            {
+              "kind": "submenu",
+              "label": "Profile",
+              "items": [
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.warm-portrait"
+                  },
+                  "label": "Warm Portrait"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.vivid-slide"
+                  },
+                  "label": "Vivid Slide"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.golden-hour"
+                  },
+                  "label": "Golden Hour"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.faded-print"
+                  },
+                  "label": "Faded Print"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.matte"
+                  },
+                  "label": "Matte"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.cool-cinema"
+                  },
+                  "label": "Cool Cinema"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.soft-pastel"
+                  },
+                  "label": "Soft Pastel"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.cross-process"
+                  },
+                  "label": "Cross Process"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.classic-bw"
+                  },
+                  "label": "Classic B&W"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.high-contrast-bw"
+                  },
+                  "label": "High Contrast B&W"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.soft-bw"
+                  },
+                  "label": "Soft B&W"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.selenium"
+                  },
+                  "label": "Selenium"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "builtin.sepia"
+                  },
+                  "label": "Sepia"
+                },
+                {
+                  "kind": "separator"
+                },
+                {
+                  "kind": "action",
+                  "actionId": "develop.profile.set",
+                  "params": {
+                    "profileId": "none"
+                  },
+                  "label": "None"
+                }
+              ]
+            },
+            {
+              "kind": "separator"
+            },
+            {
+              "kind": "action",
+              "actionId": "develop.settings.sync",
+              "label": "Sync Settings"
+            },
+            {
+              "kind": "action",
+              "actionId": "develop.reset",
+              "label": "Reset Develop Settings"
             }
           ]
         },

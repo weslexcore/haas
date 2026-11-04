@@ -1,3 +1,4 @@
+import type { Profile } from "../develop/profiles";
 import type { EditRecipe, SettingsGroup } from "../develop/recipe";
 import type { AiTurn } from "../ai/thread";
 
@@ -100,6 +101,8 @@ export interface DevelopState {
   cropTool: boolean;
   /** In the crop overlay, the next drag draws a line to straighten along. */
   levelTool: boolean;
+  /** The user's own profiles (built-ins are in core/develop/profiles.ts). Persisted in local settings. */
+  profiles: Profile[];
 }
 
 export interface AppState {
@@ -156,7 +159,7 @@ export const initialState: AppState = {
   palette: { open: false, actionId: null },
   contextMenu: null,
   shortcutsOpen: false,
-  develop: { clipboard: null, cropTool: false, levelTool: false },
+  develop: { clipboard: null, cropTool: false, levelTool: false, profiles: [] },
   ai: { previewing: false, settingsOpen: false, panelOpen: false, thread: [] },
   library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0 },
   photos: { order: [], byId: {} },

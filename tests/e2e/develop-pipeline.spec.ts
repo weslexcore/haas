@@ -12,7 +12,8 @@ test("GPU develop pipeline matches the CPU reference", async ({ page }) => {
     const load = (path: string) => import(/* @vite-ignore */ path);
     const { WebGL2Renderer } = (await load("/src/adapters/render/webgl2-renderer.ts")) as typeof import("../../src/adapters/render/webgl2-renderer");
     const { processImageData } = (await load("/src/core/develop/pipeline.ts")) as typeof import("../../src/core/develop/pipeline");
-    const { defaultRecipe, applyPartial } = (await load("/src/core/develop/recipe.ts")) as typeof import("../../src/core/develop/recipe");
+    const { defaultRecipe, applyPartial, lookSchema } = (await load("/src/core/develop/recipe.ts")) as typeof import("../../src/core/develop/recipe");
+    const { BUILTIN_PROFILES } = (await load("/src/core/develop/profiles.ts")) as typeof import("../../src/core/develop/profiles");
 
     // Hue sweep across, lightness down, plus a grey ramp row band.
     const W = 96;
@@ -38,11 +39,33 @@ test("GPU develop pipeline matches the CPU reference", async ({ page }) => {
       everything: { exposure: -1.2, contrast: -40, highlights: 80, shadows: -50, temperature: -60, vibrance: -40, saturation: 60, vignette: -50, toneCurve: [[0, 0], [0.5, 0.6], [1, 1]], hsl: { hue: { magenta: 100 } } },
     } as const;
 
+    // Every built-in profile (on top of some slider settings), plus extreme looks: heavy grain and toning, amount 200.
+    type Recipe = ReturnType<typeof defaultRecipe>;
+    const profiled: Record<string, Recipe> = {};
+    const withProfile = (id: string, name: string, look: import("../../src/core/develop/recipe").Look, amount = 100): Recipe => ({
+      ...applyPartial(defaultRecipe(), { exposure: 0.3, contrast: 15, saturation: 10 }),
+      profile: { id, name, amount, look },
+    });
+    for (const p of BUILTIN_PROFILES) profiled[`profile ${p.name}`] = withProfile(p.id, p.name, p.look);
+    profiled["profile extreme"] = withProfile(
+      "user.extreme",
+      "Extreme",
+      lookSchema.parse({
+        saturation: -60,
+        fade: 40,
+        curves: { red: [[0, 0.1], [0.5, 0.7], [1, 1]], blue: [[0, 0], [0.4, 0.2], [1, 0.8]] },
+        splitToning: { shadowHue: 200, shadowSaturation: 100, highlightHue: 30, highlightSaturation: 100, balance: -50 },
+        grain: { amount: 100, size: 0 },
+      }),
+      200,
+    );
+    profiled["profile mono grain"] = withProfile("user.mono", "Mono", lookSchema.parse({ monochrome: { red: 120, green: -40, blue: 20 }, grain: { amount: 80, size: 100 } }), 150);
+
     const renderer = new WebGL2Renderer(new OffscreenCanvas(1, 1));
     renderer.setSource(bitmap, { width: W, height: H });
     const out: Record<string, { maxDiff: number; meanDiff: number }> = {};
-    for (const [name, partial] of Object.entries(recipes)) {
-      const recipe = applyPartial(defaultRecipe(), partial as never);
+    const all: Array<[string, Recipe]> = [...Object.entries(recipes).map(([name, partial]) => [name, applyPartial(defaultRecipe(), partial as never)] as [string, Recipe]), ...Object.entries(profiled)];
+    for (const [name, recipe] of all) {
       renderer.render(recipe);
       const gpu = renderer.readPixels();
       const cpu = new Uint8ClampedArray(source.data);

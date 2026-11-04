@@ -39,7 +39,8 @@ export class WebGL2Renderer implements DevelopRenderer {
     for (const name of [
       "uUvTransform", "uImage", "uCurve", "uOriginal", "uWbGains", "uExposure", "uBlackPoint", "uWhitePoint",
       "uShadows", "uHighlights", "uContrast", "uVibrance", "uSaturation", "uVignette", "uVignetteRect",
-      "uHslHue", "uHslSat", "uHslLum",
+      "uHslHue", "uHslSat", "uHslLum", "uProfile", "uProfileAmount", "uMono", "uMonoMix", "uProfileSat",
+      "uShadowTint", "uHighlightTint", "uToneBalance", "uFade", "uGrain", "uGrainCells",
     ]) {
       this.loc[name] = gl.getUniformLocation(this.program, name);
     }
@@ -161,12 +162,36 @@ export class WebGL2Renderer implements DevelopRenderer {
     gl.uniform1fv(loc.uHslSat!, u.hslSat);
     gl.uniform1fv(loc.uHslLum!, u.hslLum);
 
-    const curveKey = JSON.stringify(recipe.toneCurve);
+    const p = u.profile;
+    gl.uniform1i(loc.uProfile!, p ? 1 : 0);
+    if (p) {
+      gl.uniform1f(loc.uProfileAmount!, p.amount);
+      gl.uniform1i(loc.uMono!, p.mono ? 1 : 0);
+      gl.uniform3fv(loc.uMonoMix!, p.mono ?? [0, 0, 0]);
+      gl.uniform1f(loc.uProfileSat!, p.saturation);
+      gl.uniform3fv(loc.uShadowTint!, p.shadowTint);
+      gl.uniform3fv(loc.uHighlightTint!, p.highlightTint);
+      gl.uniform1f(loc.uToneBalance!, p.balance);
+      gl.uniform1f(loc.uFade!, p.fade);
+      gl.uniform1f(loc.uGrain!, p.grain);
+      const aspect = this.size.width / this.size.height;
+      gl.uniform2f(loc.uGrainCells!, p.grainCells * Math.min(1, aspect), p.grainCells * Math.min(1, 1 / aspect));
+    }
+
+    // R, G, B: the profile's channel curves; A: the master tone curve.
+    const curveKey = JSON.stringify([recipe.toneCurve, recipe.profile?.look.curves]);
     if (curveKey !== this.lastCurve) {
+      const lut = new Uint8Array(256 * 4);
+      for (let i = 0; i < 256; i++) {
+        lut[i * 4] = p ? p.curves[0][i]! : i;
+        lut[i * 4 + 1] = p ? p.curves[1][i]! : i;
+        lut[i * 4 + 2] = p ? p.curves[2][i]! : i;
+        lut[i * 4 + 3] = u.curve[i]!;
+      }
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.curve);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 256, 1, 0, gl.RED, gl.UNSIGNED_BYTE, u.curve);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, lut);
       this.lastCurve = curveKey;
     }
     gl.activeTexture(gl.TEXTURE0);

@@ -93,8 +93,24 @@ export const CONCEPTS: Concept[] = [
     explanation:
       "Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, " +
       "contrast, highlights, shadows, whites, blacks, vibrance, saturation, a post-crop vignette, a tone curve, HSL per colour band, " +
-      "and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply " +
+      "and crop/straighten, plus an optional profile. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply " +
       "them at full resolution. A photo with default settings is unedited.",
+  },
+  {
+    term: "Profiles",
+    explanation:
+      "A profile is a film look applied under the sliders (as in Lightroom): colour or black and white, " +
+      "per-channel curves, split toning, fade and grain, with an amount (0–200%). Applying one keeps the " +
+      "sliders. There are built-in profiles (ids `builtin.…`) and the user's own (`user.…`), which can be " +
+      "created, edited, deleted, and exported to or imported from JSON files. A photo's edit holds a copy " +
+      "of its profile's look, so it renders the same where that profile isn't installed.",
+  },
+  {
+    term: "Auto",
+    explanation:
+      "`develop.auto` sets tone (exposure, contrast, highlights, shadows, whites, blacks, vibrance) and/or " +
+      "white balance from each photo's own pixels, inside its crop, accounting for its profile. Each photo " +
+      "is analysed separately, so a batch gets individual settings in one undo step.",
   },
   {
     term: "Undo and transactions",
@@ -138,6 +154,28 @@ export const WORKFLOWS: Workflow[] = [
         },
         note: "Applies to every selected photo.",
       },
+    ],
+  },
+  {
+    title: "Give a set of photos a consistent look",
+    goal: "Apply one film profile to the selection, then correct each photo's exposure and white balance individually.",
+    steps: [
+      { actionId: "develop.profiles.list", note: "Choose a profile by its description (or the user's own)." },
+      { actionId: "develop.profile.set", params: { profileId: "builtin.warm-portrait" }, note: "Apply it to every selected photo." },
+      { actionId: "develop.auto", params: { include: ["wb", "tone"] }, note: "Then Auto, so each photo is corrected under the profile." },
+    ],
+  },
+  {
+    title: "Make a reusable profile",
+    goal: "Save a look as one of the user's own profiles and apply it.",
+    steps: [
+      {
+        actionId: "develop.profiles.create",
+        params: { name: "Moody Teal", from: "builtin.cool-cinema", look: { fade: 10, grain: { amount: 20 } } },
+        note: "Start from a built-in look and change some fields; returns the new id.",
+      },
+      { actionId: "develop.profile.set", params: { profileId: "user.moody-teal" }, note: "Apply it with the returned id." },
+      { actionId: "develop.profiles.export", params: { ids: ["user.moody-teal"] }, note: "Optionally save it to a file to share." },
     ],
   },
   {

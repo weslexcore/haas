@@ -39,6 +39,19 @@ uniform vec4 uVignetteRect;
 uniform float uHslHue[8];
 uniform float uHslSat[8];
 uniform float uHslLum[8];
+// Profile stage (pipeline.ts profilePixel). uCurve holds its R/G/B curves; .a is the master tone curve.
+uniform bool uProfile;
+uniform float uProfileAmount;
+uniform bool uMono;
+uniform vec3 uMonoMix;
+uniform float uProfileSat;
+uniform vec3 uShadowTint;
+uniform vec3 uHighlightTint;
+uniform float uToneBalance;
+uniform float uFade;
+uniform float uGrain;
+// Grain cells across the source image (x, y).
+uniform vec2 uGrainCells;
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const float VIGNETTE_START = 0.25;
@@ -52,8 +65,52 @@ float vignetteMask(vec2 uv) {
   return smoothstep(VIGNETTE_START, 1.0, d);
 }
 
+vec4 curveAt(float x) {
+  return texture(uCurve, vec2((x * 255.0 + 0.5) / 256.0, 0.5));
+}
+
 float curve(float x) {
-  return texture(uCurve, vec2((x * 255.0 + 0.5) / 256.0, 0.5)).r;
+  return curveAt(x).a;
+}
+
+float hash(uvec2 p) {
+  uint h = (p.x * 0x27d4eb2du) ^ (p.y * 0x165667b1u);
+  h = (h ^ (h >> 15u)) * 0x2c1b3c6du;
+  h ^= h >> 12u;
+  h *= 0x297a2d39u;
+  h ^= h >> 15u;
+  return float(h) / 4294967296.0;
+}
+
+float grainNoise(vec2 uv) {
+  vec2 g = uv * uGrainCells;
+  vec2 i = floor(g);
+  vec2 f = g - i;
+  f = f * f * (3.0 - 2.0 * f);
+  uvec2 c = uvec2(ivec2(i));
+  float a = hash(c);
+  float b = hash(c + uvec2(1u, 0u));
+  float d0 = hash(c + uvec2(0u, 1u));
+  float d1 = hash(c + uvec2(1u, 1u));
+  return a + (b - a) * f.x + (d0 - a) * f.y + (a - b - d0 + d1) * f.x * f.y - 0.5;
+}
+
+vec3 profile(vec3 c, float noise) {
+  vec3 p;
+  if (uMono) {
+    p = vec3(clamp(dot(c, uMonoMix), 0.0, 1.0));
+  } else {
+    float y = dot(c, LUMA);
+    p = clamp(y + (c - y) * (1.0 + uProfileSat), 0.0, 1.0);
+  }
+  p = vec3(curveAt(p.r).r, curveAt(p.g).g, curveAt(p.b).b);
+  float x = clamp(dot(p, LUMA) - uToneBalance * 0.5, 0.0, 1.0);
+  p = uFade + clamp(p + uShadowTint * (1.0 - x) * (1.0 - x) + uHighlightTint * x * x, 0.0, 1.0) * (1.0 - uFade);
+  if (uGrain > 0.0) {
+    float l = dot(p, LUMA);
+    p += noise * uGrain * 0.25 * (0.25 + 3.0 * l * (1.0 - l));
+  }
+  return clamp(c + (clamp(p, 0.0, 1.0) - c) * uProfileAmount, 0.0, 1.0);
 }
 
 float tone(float pl) {
@@ -140,6 +197,7 @@ void main() {
   if (v < 0.0) sc *= 1.0 + v;
   else if (v > 0.0) sc += (1.0 - sc) * v;
   sc = vec3(linearToSrgb(sc.r), linearToSrgb(sc.g), linearToSrgb(sc.b));
+  if (uProfile) sc = profile(sc, uGrain > 0.0 ? grainNoise(vSrcUv) : 0.0);
 
   vec3 hsl = rgbToHsl(sc);
   vec3 adj = bandAdjust(hsl.x);

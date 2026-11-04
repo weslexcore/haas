@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import type { Histogram } from "../../core/develop/pipeline";
 import { HSL_BANDS, SLIDERS, defaultRecipe, type HslBand, type SliderName } from "../../core/develop/recipe";
 import { monotoneCurve } from "../../core/develop/tone-curve";
@@ -6,8 +6,9 @@ import type { PhotoRecord } from "../../core/state/types";
 import { useAppState, useDispatch, useShortcut } from "../hooks";
 import { ActionButton } from "../shell/ActionButton";
 import { Kbd } from "../shell/Kbd";
-import { CurveEditor, HistogramView, Slider } from "./controls";
+import { CurveEditor, HistogramView, Section, Slider } from "./controls";
 import styles from "./DevelopPanel.module.css";
+import { ProfileSection } from "./ProfilePanel";
 
 const TRACKS: Partial<Record<SliderName, string>> = {
   temperature: "linear-gradient(90deg, #3b6fd8, #d8d8d8, #e3b23c)",
@@ -29,27 +30,6 @@ const BAND_COLORS: Record<HslBand, string> = {
 };
 
 const ASPECTS = ["original", "1:1", "4:5", "5:4", "2:3", "3:2", "16:9", "9:16"] as const;
-
-function Section({ title, children, defaultOpen = true, action }: { title: string; children: ReactNode; defaultOpen?: boolean; action?: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
-  // Opens again whenever defaultOpen turns on (e.g. Crop & Straighten when the crop tool starts).
-  const [wasDefaultOpen, setWasDefaultOpen] = useState(defaultOpen);
-  if (defaultOpen !== wasDefaultOpen) {
-    setWasDefaultOpen(defaultOpen);
-    if (defaultOpen) setOpen(true);
-  }
-  return (
-    <section className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <button type="button" className={styles.sectionToggle} aria-expanded={open} onClick={() => setOpen(!open)}>
-          <span aria-hidden="true">{open ? "▾" : "▸"}</span> {title}
-        </button>
-        {action}
-      </div>
-      {open && <div className={styles.sectionBody}>{children}</div>}
-    </section>
-  );
-}
 
 /** Every control dispatches a develop action; continuous drags coalesce into one undo step. */
 export function DevelopPanel({ photo, histogram }: { photo: PhotoRecord; histogram: Histogram | null }) {
@@ -90,6 +70,8 @@ export function DevelopPanel({ photo, histogram }: { photo: PhotoRecord; histogr
           Before/After
         </ActionButton>
       </div>
+
+      <ProfileSection photo={photo} recipe={recipe} />
 
       <Section title="Basic">
         <div className={styles.groupLabel}>White Balance</div>

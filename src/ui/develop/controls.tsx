@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import type { Histogram } from "../../core/develop/pipeline";
 import styles from "./DevelopPanel.module.css";
 
@@ -14,18 +14,44 @@ interface SliderProps {
   /** Gradient behind the track (e.g. blue→yellow for temperature). */
   track?: string;
   disabled?: boolean;
+  /** DOM id, when the label isn't unique in the panel. */
+  id?: string;
+  /** Value restored by double-click (default 0). */
+  resetValue?: number;
 }
 
-/** Range slider: drag, arrow keys, or double-click the label to reset to 0. */
-export function Slider({ label, value, min, max, step, format, onChange, track, disabled }: SliderProps) {
-  const id = `slider-${label.replace(/\W+/g, "-").toLowerCase()}`;
+/** A collapsible panel section, with an optional control (e.g. Reset) in its header. */
+export function Section({ title, children, defaultOpen = true, action }: { title: string; children: ReactNode; defaultOpen?: boolean; action?: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  // Opens again whenever defaultOpen turns on (e.g. Crop & Straighten when the crop tool starts).
+  const [wasDefaultOpen, setWasDefaultOpen] = useState(defaultOpen);
+  if (defaultOpen !== wasDefaultOpen) {
+    setWasDefaultOpen(defaultOpen);
+    if (defaultOpen) setOpen(true);
+  }
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <button type="button" className={styles.sectionToggle} aria-expanded={open} onClick={() => setOpen(!open)}>
+          <span aria-hidden="true">{open ? "▾" : "▸"}</span> {title}
+        </button>
+        {action}
+      </div>
+      {open && <div className={styles.sectionBody}>{children}</div>}
+    </section>
+  );
+}
+
+/** Range slider: drag, arrow keys, or double-click the label to reset (to 0 unless resetValue is given). */
+export function Slider({ label, value, min, max, step, format, onChange, track, disabled, id: givenId, resetValue = 0 }: SliderProps) {
+  const id = givenId ?? `slider-${label.replace(/\W+/g, "-").toLowerCase()}`;
   const shown = format ? format(value) : value > 0 ? `+${value}` : String(value);
   return (
     <div className={styles.slider}>
-      <label htmlFor={id} className={styles.sliderLabel} onDoubleClick={() => onChange(0)} title="Double-click to reset">
+      <label htmlFor={id} className={styles.sliderLabel} onDoubleClick={() => onChange(resetValue)} title="Double-click to reset">
         {label}
       </label>
-      <output htmlFor={id} className={`${styles.sliderValue} ${value !== 0 ? styles.changed : ""}`}>
+      <output htmlFor={id} className={`${styles.sliderValue} ${value !== resetValue ? styles.changed : ""}`}>
         {shown}
       </output>
       <input
@@ -39,7 +65,7 @@ export function Slider({ label, value, min, max, step, format, onChange, track, 
         className={styles.range}
         style={track ? ({ "--track": track } as CSSProperties) : undefined}
         onChange={(e) => onChange(Number(e.target.value))}
-        onDoubleClick={() => onChange(0)}
+        onDoubleClick={() => onChange(resetValue)}
       />
     </div>
   );

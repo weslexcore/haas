@@ -1,4 +1,4 @@
-import { HSL_BANDS, type EditRecipe } from "./recipe";
+import { HSL_BANDS, type EditRecipe, type RecipeProfile } from "./recipe";
 import { curveLut, sampleLut } from "./tone-curve";
 
 /**
@@ -13,7 +13,9 @@ import { curveLut, sampleLut } from "./tone-curve";
  *     contrast S-curve, tone curve
  *  4. post-crop vignette (in linear light, by position in the cropped frame)
  *  5. linear → sRGB
- *  6. HSL per band (hue/saturation/luminance), vibrance, saturation
+ *  6. profile (the look under the sliders): black and white mix or saturation,
+ *     per-channel curves, split toning, fade, grain; blended by its amount
+ *  7. HSL per band (hue/saturation/luminance), vibrance, saturation
  */
 
 export const LUMA = [0.2126, 0.7152, 0.0722] as const;
@@ -36,6 +38,30 @@ export interface DevelopUniforms {
   hslSat: number[];
   hslLum: number[];
   curve: Uint8Array;
+  /** Null when the recipe has no profile (the stage is skipped). */
+  profile: ProfileUniforms | null;
+}
+
+export interface ProfileUniforms {
+  /** 0–2 (amount 0–200%). */
+  amount: number;
+  /** Channel weights for black and white, or null for colour. */
+  mono: [number, number, number] | null;
+  /** -1 to 1. */
+  saturation: number;
+  /** Red, green and blue curve lookup tables. */
+  curves: [Uint8Array, Uint8Array, Uint8Array];
+  /** Colour offsets (zero luminance) added to shadows and highlights. */
+  shadowTint: [number, number, number];
+  highlightTint: [number, number, number];
+  /** -1 to 1: shifts where shadows end and highlights begin. */
+  balance: number;
+  /** Black level lift, 0–0.25. */
+  fade: number;
+  /** Grain strength, 0–1. */
+  grain: number;
+  /** Grain noise cells along the image's long edge. */
+  grainCells: number;
 }
 
 export function wbGains(temperature: number, tint: number): [number, number, number] {
@@ -62,6 +88,32 @@ export function uniformsFor(r: EditRecipe): DevelopUniforms {
     hslSat: HSL_BANDS.map((b) => r.hsl.saturation[b] / 100),
     hslLum: HSL_BANDS.map((b) => r.hsl.luminance[b] / 100),
     curve: curveLut(r.toneCurve),
+    profile: r.profile ? profileUniforms(r.profile) : null,
+  };
+}
+
+/** Hue (degrees) and saturation (0–100) as a colour offset with zero luminance. */
+function tint(hue: number, saturation: number): [number, number, number] {
+  const [r, g, b] = hslToRgb(hue / 360, 1, 0.5);
+  const y = r * LUMA[0] + g * LUMA[1] + b * LUMA[2];
+  const k = (saturation / 100) * 0.25;
+  return [(r - y) * k, (g - y) * k, (b - y) * k];
+}
+
+export function profileUniforms(p: RecipeProfile): ProfileUniforms {
+  const { look } = p;
+  const st = look.splitToning;
+  return {
+    amount: p.amount / 100,
+    mono: look.monochrome ? [look.monochrome.red / 100, look.monochrome.green / 100, look.monochrome.blue / 100] : null,
+    saturation: look.saturation / 100,
+    curves: [curveLut(look.curves.red), curveLut(look.curves.green), curveLut(look.curves.blue)],
+    shadowTint: tint(st.shadowHue, st.shadowSaturation),
+    highlightTint: tint(st.highlightHue, st.highlightSaturation),
+    balance: st.balance / 100,
+    fade: (look.fade / 100) * 0.25,
+    grain: look.grain.amount / 100,
+    grainCells: 2400 / (1 + look.grain.size / 25),
   };
 }
 
@@ -82,6 +134,71 @@ export function vignetteMask(x: number, y: number): number {
   const d = Math.hypot((x - 0.5) * 2, (y - 0.5) * 2) / Math.SQRT2;
   return smoothstep(VIGNETTE_START, 1, d);
 }
+
+/** 32-bit integer hash of a grid cell to [0, 1). The shader uses the same bit operations. */
+function hash(x: number, y: number): number {
+  let h = Math.imul(x, 0x27d4eb2d) ^ Math.imul(y, 0x165667b1);
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+  h ^= h >>> 12;
+  h = Math.imul(h, 0x297a2d39);
+  h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+
+/**
+ * Film grain noise, -0.5 to 0.5, at a point (u, v in 0–1) of the source image:
+ * smooth value noise on a grid of `cells` along the long edge, so the grain is
+ * fixed to the photo whatever size it is rendered at. `aspect` is width/height.
+ */
+export function grainNoise(u: number, v: number, aspect: number, cells: number): number {
+  const gx = u * cells * Math.min(1, aspect);
+  const gy = v * cells * Math.min(1, 1 / aspect);
+  const ix = Math.floor(gx);
+  const iy = Math.floor(gy);
+  let fx = gx - ix;
+  let fy = gy - iy;
+  fx = fx * fx * (3 - 2 * fx);
+  fy = fy * fy * (3 - 2 * fy);
+  const a = hash(ix, iy);
+  const b = hash(ix + 1, iy);
+  const c = hash(ix, iy + 1);
+  const d = hash(ix + 1, iy + 1);
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy - 0.5;
+}
+
+/** The profile stage on an sRGB pixel. `noise` is the pixel's `grainNoise`. */
+export function profilePixel(r: number, g: number, b: number, p: ProfileUniforms, noise: number): [number, number, number] {
+  let cr: number, cg: number, cb: number;
+  if (p.mono) {
+    cr = cg = cb = clamp(r * p.mono[0] + g * p.mono[1] + b * p.mono[2]);
+  } else {
+    const y = r * LUMA[0] + g * LUMA[1] + b * LUMA[2];
+    const k = 1 + p.saturation;
+    cr = clamp(y + (r - y) * k);
+    cg = clamp(y + (g - y) * k);
+    cb = clamp(y + (b - y) * k);
+  }
+  cr = sampleLut(p.curves[0], cr);
+  cg = sampleLut(p.curves[1], cg);
+  cb = sampleLut(p.curves[2], cb);
+
+  const x = clamp(cr * LUMA[0] + cg * LUMA[1] + cb * LUMA[2] - p.balance * 0.5);
+  const ws = (1 - x) * (1 - x);
+  const wh = x * x;
+  cr = p.fade + clamp(cr + p.shadowTint[0] * ws + p.highlightTint[0] * wh) * (1 - p.fade);
+  cg = p.fade + clamp(cg + p.shadowTint[1] * ws + p.highlightTint[1] * wh) * (1 - p.fade);
+  cb = p.fade + clamp(cb + p.shadowTint[2] * ws + p.highlightTint[2] * wh) * (1 - p.fade);
+
+  if (p.grain > 0) {
+    const l = cr * LUMA[0] + cg * LUMA[1] + cb * LUMA[2];
+    const n = noise * p.grain * 0.25 * (0.25 + 3 * l * (1 - l));
+    cr += n;
+    cg += n;
+    cb += n;
+  }
+  return [clamp(r + (clamp(cr) - r) * p.amount), clamp(g + (clamp(cg) - g) * p.amount), clamp(b + (clamp(cb) - b) * p.amount)];
+}
+
 export const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 export const linearToSrgb = (c: number) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 
@@ -150,8 +267,11 @@ export function bandAdjust(h: number, u: DevelopUniforms): [number, number, numb
   return [u.hslHue[0]!, u.hslSat[0]!, u.hslLum[0]!];
 }
 
-/** Process one sRGB pixel (0–1 per channel). `mask` is the pixel's `vignetteMask`. */
-export function processPixel(r: number, g: number, b: number, u: DevelopUniforms, mask = 0): [number, number, number] {
+/**
+ * Process one sRGB pixel (0–1 per channel). `mask` is the pixel's
+ * `vignetteMask` and `noise` its `grainNoise`.
+ */
+export function processPixel(r: number, g: number, b: number, u: DevelopUniforms, mask = 0, noise = 0): [number, number, number] {
   let lr = srgbToLinear(r) * u.wbGains[0] * u.exposure;
   let lg = srgbToLinear(g) * u.wbGains[1] * u.exposure;
   let lb = srgbToLinear(b) * u.wbGains[2] * u.exposure;
@@ -182,9 +302,10 @@ export function processPixel(r: number, g: number, b: number, u: DevelopUniforms
     cb += (1 - cb) * v;
   }
 
-  const sr = linearToSrgb(cr);
-  const sg = linearToSrgb(cg);
-  const sb = linearToSrgb(cb);
+  let sr = linearToSrgb(cr);
+  let sg = linearToSrgb(cg);
+  let sb = linearToSrgb(cb);
+  if (u.profile) [sr, sg, sb] = profilePixel(sr, sg, sb, u.profile, noise);
 
   let [h, s, l] = rgbToHsl(sr, sg, sb);
   const [dh, ds, dl] = bandAdjust(h, u);
@@ -200,16 +321,21 @@ export function processPixel(r: number, g: number, b: number, u: DevelopUniforms
 
 /**
  * Apply the pipeline to RGBA8 pixels in place (CPU reference; also used for
- * tests). The pixels are taken to be the whole cropped frame, `width` across;
- * without a width the vignette is skipped.
+ * tests). The pixels are taken to be the whole cropped frame, `width` across,
+ * and (for grain) the uncropped source; without a width the vignette and
+ * grain are skipped.
  */
 export function processImageData(data: Uint8ClampedArray | Uint8Array, recipe: EditRecipe, width?: number): void {
   const u = uniformsFor(recipe);
   const height = width ? data.length / 4 / width : 0;
+  const grain = width && u.profile && u.profile.grain > 0 ? u.profile.grainCells : 0;
   for (let i = 0; i < data.length; i += 4) {
     const px = i / 4;
-    const mask = width && u.vignette !== 0 ? vignetteMask(((px % width) + 0.5) / width, (Math.floor(px / width) + 0.5) / height) : 0;
-    const [r, g, b] = processPixel(data[i]! / 255, data[i + 1]! / 255, data[i + 2]! / 255, u, mask);
+    const x = width ? ((px % width) + 0.5) / width : 0;
+    const y = width ? (Math.floor(px / width) + 0.5) / height : 0;
+    const mask = width && u.vignette !== 0 ? vignetteMask(x, y) : 0;
+    const noise = grain ? grainNoise(x, y, width! / height, grain) : 0;
+    const [r, g, b] = processPixel(data[i]! / 255, data[i + 1]! / 255, data[i + 2]! / 255, u, mask, noise);
     data[i] = Math.round(r * 255);
     data[i + 1] = Math.round(g * 255);
     data[i + 2] = Math.round(b * 255);

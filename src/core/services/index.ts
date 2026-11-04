@@ -1,3 +1,4 @@
+import type { PixelData } from "../develop/auto";
 import type { EditRecipe } from "../develop/recipe";
 import type { ColorLabel, ExifSummary, Flag, FolderInfo, PhotoRecord } from "../state/types";
 
@@ -121,6 +122,11 @@ export interface PreviewService {
    * its long edge is at most maxEdge. Sample photos get a synthetic image.
    */
   decode(photo: PhotoRecord, opts?: { maxEdge?: number }): Promise<ImageBitmap | null>;
+  /**
+   * Small unedited RGBA pixels of the photo (oriented, long edge at most
+   * maxEdge), for analysis such as Auto. Null when it can't be decoded.
+   */
+  readPixels(photo: PhotoRecord, opts: { maxEdge: number }): Promise<PixelData | null>;
   /** Drop cached object URLs (e.g. when the folder changes). */
   reset(): void;
 }

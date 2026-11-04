@@ -45,6 +45,68 @@ export const cropSchema = z.object({
   angle: z.number().min(-45).max(45),
 });
 
+const IDENTITY_CURVE: Array<[number, number]> = [
+  [0, 0],
+  [1, 1],
+];
+const channelCurve = z.array(curvePoint).min(2).max(16).default(IDENTITY_CURVE);
+
+/**
+ * A profile's look: the base rendering applied under the sliders (see
+ * pipeline.ts). Every field has a neutral default, so a partial look (or one
+ * saved before a field existed) parses.
+ */
+export const lookSchema = z.object({
+  /** Per-channel curves, control points (input, output) in 0–1. */
+  curves: z
+    .object({ red: channelCurve, green: channelCurve, blue: channelCurve })
+    .default({ red: IDENTITY_CURVE, green: IDENTITY_CURVE, blue: IDENTITY_CURVE })
+    .describe("Red, green and blue curves: control points [input, output] in 0–1."),
+  /** Black and white: channel mix in percent (null for colour). */
+  monochrome: z
+    .object({ red: z.number().min(-200).max(200), green: z.number().min(-200).max(200), blue: z.number().min(-200).max(200) })
+    .nullable()
+    .default(null)
+    .describe("Black and white channel mix in percent (e.g. 30/59/11 neutral, high red darkens skies); null for colour."),
+  saturation: z.number().min(-100).max(100).default(0).describe("Overall saturation of the look, -100 to 100."),
+  fade: z.number().min(0).max(100).default(0).describe("Lifts the blacks for a faded print, 0 to 100."),
+  splitToning: z
+    .object({
+      shadowHue: z.number().min(0).max(360).default(0),
+      shadowSaturation: z.number().min(0).max(100).default(0),
+      highlightHue: z.number().min(0).max(360).default(0),
+      highlightSaturation: z.number().min(0).max(100).default(0),
+      balance: z.number().min(-100).max(100).default(0),
+    })
+    .default({ shadowHue: 0, shadowSaturation: 0, highlightHue: 0, highlightSaturation: 0, balance: 0 })
+    .describe("Tints shadows and highlights: hues in degrees, saturation 0 to 100, balance -100 (shadows) to 100 (highlights)."),
+  grain: z
+    .object({ amount: z.number().min(0).max(100).default(0), size: z.number().min(0).max(100).default(25) })
+    .default({ amount: 0, size: 25 })
+    .describe("Film grain: amount 0 to 100, size 0 (fine) to 100 (coarse)."),
+});
+
+export type Look = z.infer<typeof lookSchema>;
+
+export function neutralLook(): Look {
+  return lookSchema.parse({});
+}
+
+/**
+ * The profile applied to a photo. The look is a copy of the profile's, so a
+ * recipe renders the same anywhere (another browser, an XMP sidecar read
+ * elsewhere) even if that profile isn't installed there.
+ */
+export const recipeProfileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  /** Strength in percent; 100 is the profile as designed. */
+  amount: z.number().min(0).max(200),
+  look: lookSchema,
+});
+
+export type RecipeProfile = z.infer<typeof recipeProfileSchema>;
+
 export const recipeSchema = z.object({
   version: z.literal(1),
   // Sliders default to neutral so recipes saved before a slider existed still parse.
@@ -53,6 +115,8 @@ export const recipeSchema = z.object({
   toneCurve: z.array(curvePoint).min(2).max(16),
   hsl: z.object({ hue: bands, saturation: bands, luminance: bands }),
   crop: cropSchema,
+  /** Absent: no profile. */
+  profile: recipeProfileSchema.optional(),
 });
 
 export type EditRecipe = z.infer<typeof recipeSchema>;
@@ -76,21 +140,26 @@ export function defaultRecipe(): EditRecipe {
 }
 
 /** Settings groups, for reset/copy/paste/sync of only some settings. */
-export const GROUPS = ["wb", "basic", "presence", "effects", "toneCurve", "hsl", "crop"] as const;
+export const GROUPS = ["profile", "wb", "basic", "presence", "effects", "toneCurve", "hsl", "crop"] as const;
 export type SettingsGroup = (typeof GROUPS)[number];
 export const groupSchema = z.enum(GROUPS);
 
 /** Keys of the recipe that belong to each group. */
 export function groupKeys(group: SettingsGroup): Array<keyof EditRecipe> {
-  if (group === "toneCurve" || group === "hsl" || group === "crop") return [group];
+  if (group === "profile" || group === "toneCurve" || group === "hsl" || group === "crop") return [group];
   return SLIDER_NAMES.filter((n) => SLIDERS[n].group === group);
 }
 
 /** Copy the given groups from `from` onto `to` (immutably). */
 export function mergeGroups(to: EditRecipe, from: EditRecipe, groups: readonly SettingsGroup[]): EditRecipe {
-  const out = structuredClone(to);
-  for (const g of groups) for (const k of groupKeys(g)) (out as Record<string, unknown>)[k] = structuredClone(from[k]);
-  return out;
+  const out = structuredClone(to) as Record<string, unknown>;
+  for (const g of groups) {
+    for (const k of groupKeys(g)) {
+      if (from[k] === undefined) delete out[k];
+      else out[k] = structuredClone(from[k]);
+    }
+  }
+  return out as EditRecipe;
 }
 
 export function isDefaultRecipe(r: EditRecipe | undefined): boolean {

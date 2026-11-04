@@ -1,3 +1,4 @@
+import type { PixelData } from "../../core/develop/auto";
 import { isRawMimeType } from "../../core/library/formats";
 import { fileKey, localIso } from "../../core/library/util";
 import type { LibraryProvider, PhotoIndexData, PreviewService } from "../../core/services";
@@ -203,6 +204,23 @@ export class BrowserPreviewService implements PreviewService {
     return scaleBitmap(full, opts.maxEdge);
   }
 
+  async readPixels(photo: PhotoRecord, opts: { maxEdge: number }): Promise<PixelData | null> {
+    // The cached thumbnail is plenty for analysis and avoids decoding the original.
+    const url = opts.maxEdge <= THUMB_SIZE ? await this.thumbnailUrl(photo).catch(() => null) : null;
+    const bitmap = url
+      ? await createImageBitmap(await (await fetch(url)).blob()).catch(() => null)
+      : await this.decode(photo, { maxEdge: opts.maxEdge });
+    if (!bitmap) return null;
+    const s = Math.min(1, opts.maxEdge / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * s));
+    const height = Math.max(1, Math.round(bitmap.height * s));
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    return { width, height, data: ctx.getImageData(0, 0, width, height).data };
+  }
+
   private async decodeRaw(photo: PhotoRecord, file: File, maxEdge?: number): Promise<ImageBitmap | null> {
     // Small sizes (edited thumbnails, AI vision): the embedded preview, when it is big enough.
     if (maxEdge && maxEdge <= RAW_SMALL_DECODE) {
@@ -239,6 +257,9 @@ export class NullPreviewService implements PreviewService {
     return null;
   }
   async decode(_photo: PhotoRecord, _opts?: { maxEdge?: number }): Promise<ImageBitmap | null> {
+    return null;
+  }
+  async readPixels(_photo: PhotoRecord, _opts: { maxEdge: number }): Promise<PixelData | null> {
     return null;
   }
   reset(): void {}
