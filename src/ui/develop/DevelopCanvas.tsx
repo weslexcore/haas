@@ -85,14 +85,16 @@ export function DevelopCanvas({ photo, original = false, ignoreCrop = false, sca
   const crop = original ? DEFAULT_CROP : ignoreCrop ? { ...DEFAULT_CROP, angle: recipe.crop.angle } : recipe.crop;
   const output = ready ? cropOutputSize(source.size, crop) : null;
   const dpr = window.devicePixelRatio || 1;
+  // Room around the photo in the crop tool, to drag there to rotate.
+  const pad = ignoreCrop ? CROP_MARGIN : 0;
   let display: Size = { width: 0, height: 0 };
   let backing: Size = { width: 1, height: 1 };
   if (output) {
     if (scale === "actual") {
       display = { width: output.width / dpr, height: output.height / dpr };
       backing = output;
-    } else if (box.width > 0 && box.height > 0) {
-      const s = Math.min(box.width / output.width, box.height / output.height);
+    } else if (box.width > 2 * pad && box.height > 2 * pad) {
+      const s = Math.min((box.width - 2 * pad) / output.width, (box.height - 2 * pad) / output.height);
       display = { width: output.width * s, height: output.height * s };
       backing = {
         width: Math.max(1, Math.min(output.width, Math.round(display.width * dpr))),
@@ -126,3 +128,5 @@ export function DevelopCanvas({ photo, original = false, ignoreCrop = false, sca
 }
 
 const DEFAULT_RECIPE: EditRecipe = defaultRecipe();
+/** Must match the rotate zone in CropOverlay.module.css. */
+const CROP_MARGIN = 40;

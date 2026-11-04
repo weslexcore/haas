@@ -794,6 +794,23 @@ Examples:
 - `{"setting":"temperature","value":25}`: Warm up the white balance.
 - `{"setting":"contrast","value":0}`: Reset contrast.
 
+#### Straighten Along Line: `develop.crop.level`
+
+Command, undoable
+
+Straighten the active photo so a line along a horizon or vertical edge becomes level (horizontal, or vertical when the line is closer to vertical). from/to are fractions (0–1, y down) of the uncropped photo as currently straightened; with no straighten angle yet, that is the original photo. The crop is kept inside the rotated photo.
+
+*Available only when a photo is active.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `from` | object | yes | One end of the line. |
+| `to` | object | yes | The other end. |
+
+Examples:
+
+- `{"from":{"x":0.1,"y":0.52},"to":{"x":0.9,"y":0.48}}`: Level a horizon that rises to the right.
+
 #### Crop & Straighten: `develop.crop.set`
 
 Command, undoable
@@ -822,9 +839,9 @@ Examples:
 
 Command · Shortcuts: `r`
 
-Show or hide the crop & straighten overlay in Develop, where the crop can be dragged and resized.
+Show or hide the crop & straighten overlay on the active photo in Loupe or Develop, where the crop can be moved, resized and rotated.
 
-*Available only when the current view is Develop and a photo is active.*
+*Available only when the current view is Loupe or Develop and a photo is active.*
 
 #### Export JPEG: `develop.export`
 
@@ -865,6 +882,23 @@ Examples:
 
 - `{"channel":"luminance","band":"blue","value":-40}`: Darken blue skies.
 - `{"channel":"saturation","band":"orange","value":-15}`: Calm down skin tones.
+
+#### Straighten Tool: `develop.levelTool.toggle`
+
+Command
+
+Arm or disarm the straighten tool in Loupe or Develop: the next drag over the photo draws a line along a horizon or vertical edge, and the photo is rotated to make it level. Opens the crop overlay. (In the crop overlay, ⌘/Ctrl-drag does the same without arming it.)
+
+*Available only when the current view is Loupe or Develop and a photo is active.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `on` | boolean | no | Arm (true) or disarm (false); omit to toggle. |
+
+Examples:
+
+- `{}`: Toggle the straighten tool.
+- `{"on":false}`: Disarm it.
 
 #### Reset Develop Settings: `develop.reset`
 
@@ -1060,4 +1094,5 @@ Right-click on the photo in Loupe or Develop.
 - Toggle Zoom: `view.zoom.toggle`
 - Toggle Info Overlay: `view.info.toggle`
 - Toggle Filmstrip: `view.filmstrip.toggle`
+- Crop & Straighten: `develop.cropTool.toggle`
 - Show in Grid: `view.set` `{"view":"grid"}`

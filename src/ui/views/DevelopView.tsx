@@ -14,6 +14,7 @@ export function DevelopView() {
   const beforeAfter = useAppState((s) => s.beforeAfter);
   const filmstrip = useAppState((s) => s.filmstrip);
   const cropTool = useAppState((s) => s.develop.cropTool);
+  const levelTool = useAppState((s) => s.develop.levelTool);
   const info = useAppState((s) => s.infoOverlay);
   const dispatch = useDispatch();
   const [histogram, setHistogram] = useState<Histogram | null>(null);
@@ -31,7 +32,7 @@ export function DevelopView() {
             original={beforeAfter}
             ignoreCrop={cropTool && !beforeAfter}
             onHistogram={setHistogram}
-            overlay={cropTool && !beforeAfter ? (display) => <CropOverlay crop={crop} display={display} /> : undefined}
+            overlay={cropTool && !beforeAfter ? (display) => <CropOverlay crop={crop} display={display} levelTool={levelTool} /> : undefined}
             onContextMenu={(e) => {
               e.preventDefault();
               void dispatch("app.contextMenu.open", { menuId: "loupe.photo", x: e.clientX, y: e.clientY });

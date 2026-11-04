@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineAction, type AppContext } from "../core/actions/types";
 import { all, hasActivePhoto, hasSelection, inView, when } from "../core/actions/when";
-import { constrainCrop, cropForAspect } from "../core/develop/crop";
+import { constrainCrop, cropForAspect, levelAngle } from "../core/develop/crop";
 import {
   GROUPS,
   HSL_BANDS,
@@ -308,7 +308,7 @@ export const setCrop = defineAction({
     { params: { angle: -2.5 }, description: "Straighten a slightly tilted horizon." },
     { params: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 }, description: "Trim 10% from every edge." },
   ],
-  label: (p) => (p.aspect ? `Crop ${p.aspect}` : p.angle !== undefined && Object.keys(p).length === 1 ? `Straighten ${p.angle}°` : "Crop"),
+  label: (p) => (p.aspect ? `Crop ${p.aspect}` : p.angle !== undefined ? `Straighten ${p.angle}°` : "Crop"),
   coalesce: (p) => `develop.crop:${p.photoIds?.join("|") ?? ""}`,
   run(p, ctx) {
     updateEdits(ctx, targetIds(ctx.state, p.photoIds), (r, photo) => {
@@ -325,17 +325,74 @@ export const setCrop = defineAction({
   },
 });
 
+const framePoint = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
+
+export const levelCrop = defineAction({
+  id: "develop.crop.level",
+  title: "Straighten Along Line",
+  description:
+    "Straighten the active photo so a line along a horizon or vertical edge becomes level (horizontal, or " +
+    "vertical when the line is closer to vertical). from/to are fractions (0–1, y down) of the uncropped photo " +
+    "as currently straightened; with no straighten angle yet, that is the original photo. The crop is kept " +
+    "inside the rotated photo.",
+  category: "Develop",
+  kind: "command",
+  undoable: true,
+  when: hasActivePhoto,
+  params: z.object({
+    from: framePoint.describe("One end of the line."),
+    to: framePoint.describe("The other end."),
+  }),
+  examples: [{ params: { from: { x: 0.1, y: 0.52 }, to: { x: 0.9, y: 0.48 } }, description: "Level a horizon that rises to the right." }],
+  label: () => "Straighten",
+  run(p, ctx) {
+    const id = ctx.state.selection.activeId!;
+    updateEdits(ctx, [id], (r, photo) => {
+      const size = sourceSize(photo) ?? { width: 1, height: 1 };
+      const angle = levelAngle(size, r.crop.angle, p.from, p.to);
+      // Already level (or too short to measure): no change, so no undo step.
+      return angle === null || angle === r.crop.angle ? r : { ...r, crop: constrainCrop(size, { ...r.crop, angle }) };
+    });
+  },
+});
+
 export const toggleCropTool = defineAction({
   id: "develop.cropTool.toggle",
   title: "Crop Tool",
-  description: "Show or hide the crop & straighten overlay in Develop, where the crop can be dragged and resized.",
+  description:
+    "Show or hide the crop & straighten overlay on the active photo in Loupe or Develop, where the crop can be " +
+    "moved, resized and rotated.",
   category: "Develop",
   kind: "command",
-  when: all(inView("develop"), hasActivePhoto),
+  when: all(inView("loupe", "develop"), hasActivePhoto),
   defaultShortcuts: [{ keys: "r" }],
   run(_, ctx) {
     ctx.update((s) => {
       s.develop.cropTool = !s.develop.cropTool;
+      s.develop.levelTool = false;
+    });
+  },
+});
+
+export const toggleLevelTool = defineAction({
+  id: "develop.levelTool.toggle",
+  title: "Straighten Tool",
+  description:
+    "Arm or disarm the straighten tool in Loupe or Develop: the next drag over the photo draws a line along a horizon " +
+    "or vertical edge, and the photo is rotated to make it level. Opens the crop overlay. (In the crop " +
+    "overlay, ⌘/Ctrl-drag does the same without arming it.)",
+  category: "Develop",
+  kind: "command",
+  when: all(inView("loupe", "develop"), hasActivePhoto),
+  params: z.object({ on: z.boolean().optional().describe("Arm (true) or disarm (false); omit to toggle.") }).optional(),
+  examples: [
+    { params: {}, description: "Toggle the straighten tool." },
+    { params: { on: false }, description: "Disarm it." },
+  ],
+  run(p, ctx) {
+    ctx.update((s) => {
+      s.develop.levelTool = p?.on ?? !s.develop.levelTool;
+      if (s.develop.levelTool) s.develop.cropTool = true;
     });
   },
 });
@@ -410,6 +467,8 @@ export const developActions = [
   pasteSettings,
   syncSettings,
   setCrop,
+  levelCrop,
+  toggleLevelTool,
   toggleCropTool,
   exportJpeg,
 ];

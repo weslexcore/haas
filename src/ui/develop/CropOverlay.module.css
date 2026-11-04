@@ -38,3 +38,59 @@
 .s { left: 50%; top: 100%; cursor: ns-resize; }
 .sw { left: 0; top: 100%; cursor: nesw-resize; }
 .w { left: 0; top: 50%; cursor: ew-resize; }
+
+/* Drag outside the crop, including a margin around the photo, to rotate. */
+.rotateZone {
+  position: absolute;
+  inset: -40px;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M5 12a7 7 0 1 0 2.05-4.95' fill='none' stroke='%23000' stroke-width='4'/%3E%3Cpath d='M5 12a7 7 0 1 0 2.05-4.95' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M3 4v5h5z' fill='%23fff' stroke='%23000'/%3E%3C/svg%3E") 12 12, grab;
+}
+
+.leveling .rotateZone,
+.leveling .rect,
+.leveling .handle {
+  cursor: crosshair;
+}
+
+/* Finer grid while rotating, to line up with edges in the photo. */
+.fineGrid {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(12.5% - 1px), rgb(255 255 255 / 0.3) calc(12.5% - 1px) 12.5%),
+    repeating-linear-gradient(0deg, transparent 0 calc(12.5% - 1px), rgb(255 255 255 / 0.3) calc(12.5% - 1px) 12.5%);
+  pointer-events: none;
+}
+
+.line {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.line line {
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  filter: drop-shadow(0 0 1px #000);
+}
+
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  margin: 0;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.65);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.hint:empty {
+  display: none;
+}

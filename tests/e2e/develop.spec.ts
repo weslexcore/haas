@@ -112,6 +112,75 @@ test.describe("develop (sample library)", () => {
     await expect.poll(ratio).toBeCloseTo(1.5, 1); // the whole drag was one step
   });
 
+  test("crop tool: drag outside to rotate, ⌘-drag a line to level", async ({ page }) => {
+    const angle = () =>
+      page.evaluate(async () => {
+        const r = (await window.photo!.dispatch("develop.settings.get")) as { value: { settings: { crop: { angle: number } } } };
+        return r.value.settings.crop.angle;
+      });
+    await page.keyboard.press("r");
+    const area = page.getByRole("group", { name: "Crop area" });
+    const box = (await area.boundingBox())!;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+
+    // Drag clockwise in the margin to the right of the photo: from level with the centre to 10° below it.
+    const r = box.width / 2 + 20;
+    await page.mouse.move(cx + r, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + r * Math.cos(Math.PI / 18), cy + r * Math.sin(Math.PI / 18), { steps: 5 });
+    await expect(page.locator("[data-photo-id]").getByRole("status")).toHaveText("+10.0°");
+    await page.mouse.up();
+    await expect.poll(angle).toBeCloseTo(10, 0);
+    // Shrunk to stay inside the rotated photo.
+    await expect.poll(async () => (await area.boundingBox())!.width).toBeLessThan(box.width - 10);
+
+    // ⌘/Ctrl-drag along a "horizon" sloping up 5° to the right: the photo is rotated back to 5°.
+    const len = box.width * 0.3;
+    await page.keyboard.down("ControlOrMeta");
+    await page.mouse.move(cx - len, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + len * Math.cos(Math.PI / 36), cy - len * Math.sin(Math.PI / 36) * 2, { steps: 5 });
+    await page.mouse.up();
+    await page.keyboard.up("ControlOrMeta");
+    // Line from (cx−len, cy) to (cx+len·cos5°, cy−2·len·sin5°) tilts by atan(−2·sin5° / (1+cos5°)).
+    const tilt = (Math.atan2(-2 * Math.sin(Math.PI / 36), 1 + Math.cos(Math.PI / 36)) * 180) / Math.PI;
+    await expect.poll(angle).toBeCloseTo(10 - tilt, 0);
+
+    // The straighten tool button arms a one-shot plain drag.
+    await page.getByRole("button", { name: "Straighten tool" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "horizon" })).toBeVisible();
+    await page.mouse.move(cx - len, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + len, cy, { steps: 3 });
+    await page.mouse.up();
+    await expect.poll(angle).toBeCloseTo(10 - tilt, 0); // already level: unchanged
+    await expect(page.getByRole("button", { name: "Straighten tool" })).toHaveAttribute("aria-pressed", "false");
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(angle).toBeCloseTo(10, 0);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(angle).toBe(0); // the whole rotate drag was one step
+  });
+
+  test("crop in Loupe: R shows the crop, Done closes it", async ({ page }) => {
+    await page.keyboard.press("e");
+    const ratio = () => canvas(page).evaluate((el: HTMLCanvasElement) => el.width / el.height);
+    await page.keyboard.press("r");
+    const area = page.getByRole("group", { name: "Crop area" });
+    await expect(area).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Develop controls" })).toBeHidden(); // still Loupe
+    const bar = page.getByRole("toolbar", { name: "Crop" });
+    await bar.getByRole("combobox").selectOption("1:1");
+    await expect(bar.getByLabel("Straighten angle")).toHaveText("0.0°");
+    const box = (await area.boundingBox())!;
+    expect(box.width).toBeCloseTo(box.height, -1);
+    await bar.getByRole("button", { name: "Done" }).click();
+    await expect(area).toBeHidden();
+    await expect.poll(ratio).toBeCloseTo(1, 1); // Loupe shows the cropped photo
+    await expect(page).toHaveURL(/view=loupe/);
+  });
+
   test("Loupe shows edits too", async ({ page }) => {
     await page.evaluate(() => window.photo!.dispatch("develop.crop.set", { aspect: "1:1" }));
     await page.keyboard.press("e");

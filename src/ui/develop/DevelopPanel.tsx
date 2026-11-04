@@ -31,6 +31,12 @@ const ASPECTS = ["original", "1:1", "4:5", "5:4", "2:3", "3:2", "16:9", "9:16"] 
 
 function Section({ title, children, defaultOpen = true, action }: { title: string; children: ReactNode; defaultOpen?: boolean; action?: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
+  // Opens again whenever defaultOpen turns on (e.g. Crop & Straighten when the crop tool starts).
+  const [wasDefaultOpen, setWasDefaultOpen] = useState(defaultOpen);
+  if (defaultOpen !== wasDefaultOpen) {
+    setWasDefaultOpen(defaultOpen);
+    if (defaultOpen) setOpen(true);
+  }
   return (
     <section className={styles.section}>
       <div className={styles.sectionHeader}>
@@ -49,6 +55,7 @@ export function DevelopPanel({ photo, histogram }: { photo: PhotoRecord; histogr
   const dispatch = useDispatch();
   const recipe = photo.edit ?? DEFAULT;
   const cropTool = useAppState((s) => s.develop.cropTool);
+  const levelTool = useAppState((s) => s.develop.levelTool);
   const [hslChannel, setHslChannel] = useState<"hue" | "saturation" | "luminance">("hue");
   const cropShortcut = useShortcut("develop.cropTool.toggle");
   const curve = useMemo(() => monotoneCurve(recipe.toneCurve), [recipe.toneCurve]);
@@ -149,6 +156,10 @@ export function DevelopPanel({ photo, histogram }: { photo: PhotoRecord; histogr
           format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(1)}°`}
           onChange={(angle) => void dispatch("develop.crop.set", { angle })}
         />
+        <ActionButton actionId="develop.levelTool.toggle" className={`${styles.tool} ${styles.start}`} aria-pressed={levelTool}>
+          Straighten tool
+        </ActionButton>
+        <p className={styles.hint}>In crop mode, drag outside the crop to rotate, or ⌘/Ctrl-drag along a horizon to level it.</p>
         <div className={styles.aspects} role="group" aria-label="Aspect ratio">
           {ASPECTS.map((a) => (
             <button key={a} type="button" className={styles.aspect} onClick={() => void dispatch("develop.crop.set", { aspect: a })}>
