@@ -20,6 +20,8 @@ export const SLIDERS = {
   blacks: { min: -100, max: 100, step: 1, label: "Blacks", group: "basic" },
   vibrance: { min: -100, max: 100, step: 1, label: "Vibrance", group: "presence" },
   saturation: { min: -100, max: 100, step: 1, label: "Saturation", group: "presence" },
+  /** Post-crop vignette: negative darkens the corners, positive fades them to white. */
+  vignette: { min: -100, max: 100, step: 1, label: "Vignette", group: "effects" },
 } as const;
 
 export type SliderName = keyof typeof SLIDERS;
@@ -45,7 +47,8 @@ export const cropSchema = z.object({
 
 export const recipeSchema = z.object({
   version: z.literal(1),
-  ...(Object.fromEntries(SLIDER_NAMES.map((n) => [n, slider(n)])) as Record<SliderName, z.ZodNumber>),
+  // Sliders default to neutral so recipes saved before a slider existed still parse.
+  ...(Object.fromEntries(SLIDER_NAMES.map((n) => [n, slider(n).default(0)])) as Record<SliderName, z.ZodDefault<z.ZodNumber>>),
   /** Master RGB tone curve: control points (input, output) in 0–1, sorted by input, first x=0 and last x=1. */
   toneCurve: z.array(curvePoint).min(2).max(16),
   hsl: z.object({ hue: bands, saturation: bands, luminance: bands }),
@@ -73,7 +76,7 @@ export function defaultRecipe(): EditRecipe {
 }
 
 /** Settings groups, for reset/copy/paste/sync of only some settings. */
-export const GROUPS = ["wb", "basic", "presence", "toneCurve", "hsl", "crop"] as const;
+export const GROUPS = ["wb", "basic", "presence", "effects", "toneCurve", "hsl", "crop"] as const;
 export type SettingsGroup = (typeof GROUPS)[number];
 export const groupSchema = z.enum(GROUPS);
 

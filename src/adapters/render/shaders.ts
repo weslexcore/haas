@@ -7,8 +7,10 @@ export const VERTEX = /* glsl */ `#version 300 es
 in vec2 aUv;
 uniform mat3 uUvTransform;
 out vec2 vSrcUv;
+out vec2 vUv;
 void main() {
   vSrcUv = (uUvTransform * vec3(aUv, 1.0)).xy;
+  vUv = aUv;
   // Output uv has y down; clip space has y up.
   gl_Position = vec4(aUv.x * 2.0 - 1.0, 1.0 - aUv.y * 2.0, 0.0, 1.0);
 }`;
@@ -16,6 +18,7 @@ void main() {
 export const FRAGMENT = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vSrcUv;
+in vec2 vUv;
 out vec4 outColor;
 
 uniform sampler2D uImage;
@@ -30,15 +33,24 @@ uniform float uHighlights;
 uniform float uContrast;
 uniform float uVibrance;
 uniform float uSaturation;
+uniform float uVignette;
+// The crop rectangle within the rendered frame (x, y, w, h): the vignette is centred on it.
+uniform vec4 uVignetteRect;
 uniform float uHslHue[8];
 uniform float uHslSat[8];
 uniform float uHslLum[8];
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+const float VIGNETTE_START = 0.25;
 const float CENTERS[8] = float[8](0.0, 30.0 / 360.0, 60.0 / 360.0, 120.0 / 360.0, 180.0 / 360.0, 240.0 / 360.0, 270.0 / 360.0, 300.0 / 360.0);
 
 float srgbToLinear(float c) { return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4); }
 float linearToSrgb(float c) { return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1.0 / 2.4) - 0.055; }
+
+float vignetteMask(vec2 uv) {
+  float d = length((uv - 0.5) * 2.0) / sqrt(2.0);
+  return smoothstep(VIGNETTE_START, 1.0, d);
+}
 
 float curve(float x) {
   return texture(uCurve, vec2((x * 255.0 + 0.5) / 256.0, 0.5)).r;
@@ -124,6 +136,9 @@ void main() {
   lin = L > 1e-5 ? lin * (L2 / L) : vec3(L2);
 
   vec3 sc = clamp(lin, 0.0, 1.0);
+  float v = uVignette * vignetteMask((vUv - uVignetteRect.xy) / uVignetteRect.zw);
+  if (v < 0.0) sc *= 1.0 + v;
+  else if (v > 0.0) sc += (1.0 - sc) * v;
   sc = vec3(linearToSrgb(sc.r), linearToSrgb(sc.g), linearToSrgb(sc.b));
 
   vec3 hsl = rgbToHsl(sc);

@@ -14,6 +14,7 @@ const TRACKS: Partial<Record<SliderName, string>> = {
   tint: "linear-gradient(90deg, #3fae4a, #d8d8d8, #c447c4)",
   saturation: "linear-gradient(90deg, #888, #e0412f)",
   vibrance: "linear-gradient(90deg, #888, #e07b2f)",
+  vignette: "linear-gradient(90deg, #111, #888, #eee)",
 };
 
 const BAND_COLORS: Record<HslBand, string> = {
@@ -144,6 +145,17 @@ export function DevelopPanel({ photo, histogram }: { photo: PhotoRecord; histogr
             onChange={(value) => void dispatch("develop.hsl.set", { channel: hslChannel, band, value })}
           />
         ))}
+      </Section>
+
+      <Section
+        title="Effects"
+        action={
+          <button type="button" className={styles.reset} onClick={() => void dispatch("develop.reset", { groups: ["effects"] })}>
+            Reset
+          </button>
+        }
+      >
+        {slider("vignette")}
       </Section>
 
       <Section title="Crop & Straighten" defaultOpen={cropTool}>

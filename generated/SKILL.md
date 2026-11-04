@@ -44,7 +44,7 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 **Views.** `grid` shows thumbnails for fast scanning, `loupe` shows the active photo large for close review, and `develop` shows the active photo with editing controls.
 
-**Edit recipes.** Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a tone curve, HSL per colour band, and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited.
+**Edit recipes.** Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a post-crop vignette, a tone curve, HSL per colour band, and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited.
 
 **Undo and transactions.** Undoable commands are recorded in history. A transaction groups several commands into one undo step; AI-proposed plans are always applied as a single transaction after the user reviews them.
 
@@ -779,13 +779,13 @@ Examples:
 
 Command, undoable
 
-Set (value) or nudge (delta) one Basic-panel slider on the selected photos: temperature, tint, exposure (stops, -5 to 5), contrast, highlights, shadows, whites, blacks, vibrance or saturation (-100 to 100). Use delta to change each photo relative to its current setting.
+Set (value) or nudge (delta) one slider on the selected photos: temperature, tint, exposure (stops, -5 to 5), contrast, highlights, shadows, whites, blacks, vibrance, saturation or vignette (-100 to 100; negative vignette darkens the corners, positive lightens them). Use delta to change each photo relative to its current setting.
 
 *Available only when at least one photo is selected.*
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `setting` | `"temperature"` \| `"tint"` \| `"exposure"` \| `"contrast"` \| `"highlights"` \| `"shadows"` \| `"whites"` \| `"blacks"` \| `"vibrance"` \| `"saturation"` | yes | Which slider. |
+| `setting` | `"temperature"` \| `"tint"` \| `"exposure"` \| `"contrast"` \| `"highlights"` \| `"shadows"` \| `"whites"` \| `"blacks"` \| `"vibrance"` \| `"saturation"` \| `"vignette"` | yes | Which slider. |
 | `value` | number | no | New value (clamped to the slider's range). |
 | `delta` | number | no | Amount to add to the current value. |
 | `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
@@ -912,7 +912,7 @@ Reset the selected photos' develop settings to unedited, or only the given group
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Only these groups (wb, basic, presence, toneCurve, hsl, crop). Omit for all. |
+| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Only these groups (wb, basic, presence, effects, toneCurve, hsl, crop). Omit for all. |
 | `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
 
 Examples:
@@ -948,7 +948,7 @@ Copy the active photo's develop settings (by default everything except crop) to 
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: wb, basic, presence, toneCurve, hsl, crop. Defaults to everything except crop. |
+| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop. |
 
 Examples:
 
@@ -997,7 +997,7 @@ Copy the active photo's develop settings to every other selected photo (by defau
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: wb, basic, presence, toneCurve, hsl, crop. Defaults to everything except crop. |
+| `groups` | `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop. |
 
 Examples:
 

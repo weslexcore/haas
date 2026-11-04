@@ -11,8 +11,9 @@ import { curveLut, sampleLut } from "./tone-curve";
  *  3. tone, on perceptual luminance (L^(1/2.2)) with RGB scaled by the luminance
  *     ratio so hues don't shift: black/white points, shadows, highlights,
  *     contrast S-curve, tone curve
- *  4. linear → sRGB
- *  5. HSL per band (hue/saturation/luminance), vibrance, saturation
+ *  4. post-crop vignette (in linear light, by position in the cropped frame)
+ *  5. linear → sRGB
+ *  6. HSL per band (hue/saturation/luminance), vibrance, saturation
  */
 
 export const LUMA = [0.2126, 0.7152, 0.0722] as const;
@@ -29,6 +30,8 @@ export interface DevelopUniforms {
   contrast: number;
   vibrance: number;
   saturation: number;
+  /** -1 (black corners) to 1 (white corners). */
+  vignette: number;
   hslHue: number[];
   hslSat: number[];
   hslLum: number[];
@@ -54,6 +57,7 @@ export function uniformsFor(r: EditRecipe): DevelopUniforms {
     contrast: (r.contrast / 100) * 0.8,
     vibrance: r.vibrance / 100,
     saturation: r.saturation / 100,
+    vignette: r.vignette / 100,
     hslHue: HSL_BANDS.map((b) => ((r.hsl.hue[b] / 100) * 30) / 360),
     hslSat: HSL_BANDS.map((b) => r.hsl.saturation[b] / 100),
     hslLum: HSL_BANDS.map((b) => r.hsl.luminance[b] / 100),
@@ -62,6 +66,22 @@ export function uniformsFor(r: EditRecipe): DevelopUniforms {
 }
 
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = clamp((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
+
+/** Where the vignette starts, as a fraction of the centre-to-corner distance. */
+export const VIGNETTE_START = 0.25;
+
+/**
+ * Vignette strength at a point of the cropped frame, (x, y) in 0–1: 0 at the
+ * centre, rising smoothly to 1 in the corners.
+ */
+export function vignetteMask(x: number, y: number): number {
+  const d = Math.hypot((x - 0.5) * 2, (y - 0.5) * 2) / Math.SQRT2;
+  return smoothstep(VIGNETTE_START, 1, d);
+}
 export const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 export const linearToSrgb = (c: number) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 
@@ -130,8 +150,8 @@ export function bandAdjust(h: number, u: DevelopUniforms): [number, number, numb
   return [u.hslHue[0]!, u.hslSat[0]!, u.hslLum[0]!];
 }
 
-/** Process one sRGB pixel (0–1 per channel). */
-export function processPixel(r: number, g: number, b: number, u: DevelopUniforms): [number, number, number] {
+/** Process one sRGB pixel (0–1 per channel). `mask` is the pixel's `vignetteMask`. */
+export function processPixel(r: number, g: number, b: number, u: DevelopUniforms, mask = 0): [number, number, number] {
   let lr = srgbToLinear(r) * u.wbGains[0] * u.exposure;
   let lg = srgbToLinear(g) * u.wbGains[1] * u.exposure;
   let lb = srgbToLinear(b) * u.wbGains[2] * u.exposure;
@@ -148,9 +168,23 @@ export function processPixel(r: number, g: number, b: number, u: DevelopUniforms
     lr = lg = lb = L2;
   }
 
-  const sr = linearToSrgb(clamp(lr));
-  const sg = linearToSrgb(clamp(lg));
-  const sb = linearToSrgb(clamp(lb));
+  let cr = clamp(lr);
+  let cg = clamp(lg);
+  let cb = clamp(lb);
+  const v = u.vignette * mask;
+  if (v < 0) {
+    cr *= 1 + v;
+    cg *= 1 + v;
+    cb *= 1 + v;
+  } else if (v > 0) {
+    cr += (1 - cr) * v;
+    cg += (1 - cg) * v;
+    cb += (1 - cb) * v;
+  }
+
+  const sr = linearToSrgb(cr);
+  const sg = linearToSrgb(cg);
+  const sb = linearToSrgb(cb);
 
   let [h, s, l] = rgbToHsl(sr, sg, sb);
   const [dh, ds, dl] = bandAdjust(h, u);
@@ -164,11 +198,18 @@ export function processPixel(r: number, g: number, b: number, u: DevelopUniforms
   return hslToRgb(h, clamp(s), clamp(l));
 }
 
-/** Apply the pipeline to RGBA8 pixels in place (CPU reference; also used for tests). */
-export function processImageData(data: Uint8ClampedArray | Uint8Array, recipe: EditRecipe): void {
+/**
+ * Apply the pipeline to RGBA8 pixels in place (CPU reference; also used for
+ * tests). The pixels are taken to be the whole cropped frame, `width` across;
+ * without a width the vignette is skipped.
+ */
+export function processImageData(data: Uint8ClampedArray | Uint8Array, recipe: EditRecipe, width?: number): void {
   const u = uniformsFor(recipe);
+  const height = width ? data.length / 4 / width : 0;
   for (let i = 0; i < data.length; i += 4) {
-    const [r, g, b] = processPixel(data[i]! / 255, data[i + 1]! / 255, data[i + 2]! / 255, u);
+    const px = i / 4;
+    const mask = width && u.vignette !== 0 ? vignetteMask(((px % width) + 0.5) / width, (Math.floor(px / width) + 0.5) / height) : 0;
+    const [r, g, b] = processPixel(data[i]! / 255, data[i + 1]! / 255, data[i + 2]! / 255, u, mask);
     data[i] = Math.round(r * 255);
     data[i + 1] = Math.round(g * 255);
     data[i + 2] = Math.round(b * 255);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyAffine, constrainCrop, cropForAspect, cropOutputSize, cropToSourceAffine, levelAngle, rotateByDrag } from "../../src/core/develop/crop";
-import { processPixel, uniformsFor, wbGains, LUMA, computeHistogram } from "../../src/core/develop/pipeline";
+import { processPixel, uniformsFor, vignetteMask, wbGains, LUMA, computeHistogram } from "../../src/core/develop/pipeline";
 import { applyPartial, defaultRecipe, isDefaultRecipe, mergeGroups, normalizeCurve, recipeSchema } from "../../src/core/develop/recipe";
 import { curveLut, monotoneCurve } from "../../src/core/develop/tone-curve";
 import { createTestRuntime } from "./helpers";
@@ -10,6 +10,9 @@ const near = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) < eps;
 describe("recipe", () => {
   it("defaults are valid and neutral", () => {
     expect(recipeSchema.safeParse(defaultRecipe()).success).toBe(true);
+    // A recipe saved before a slider existed still parses, with that slider neutral.
+    const { vignette: _, ...old } = defaultRecipe();
+    expect(recipeSchema.parse(old).vignette).toBe(0);
     expect(isDefaultRecipe(defaultRecipe())).toBe(true);
     expect(isDefaultRecipe(applyPartial(defaultRecipe(), { exposure: 0.1 }))).toBe(false);
   });
@@ -50,6 +53,20 @@ describe("pipeline", () => {
     const recovered = applyPartial(bright, { highlights: -100 });
     expect(processPixel(0.8, 0.8, 0.8, uniformsFor(recovered))[0]).toBeLessThan(processPixel(0.8, 0.8, 0.8, uniformsFor(bright))[0]);
     expect(processPixel(0.1, 0.1, 0.1, uniformsFor(applyPartial(defaultRecipe(), { shadows: 100 })))[0]).toBeGreaterThan(0.1);
+  });
+
+  it("vignette leaves the centre alone and darkens or lightens the corners", () => {
+    expect(vignetteMask(0.5, 0.5)).toBe(0);
+    expect(vignetteMask(0, 0)).toBeCloseTo(1, 6);
+    expect(vignetteMask(1, 1)).toBeCloseTo(1, 6);
+    expect(vignetteMask(0.5, 0)).toBeGreaterThan(0);
+    expect(vignetteMask(0.5, 0)).toBeLessThan(vignetteMask(0, 0));
+    const dark = uniformsFor(applyPartial(defaultRecipe(), { vignette: -100 }));
+    expect(processPixel(0.5, 0.5, 0.5, dark, vignetteMask(0.5, 0.5))[0]).toBeCloseTo(0.5, 2);
+    expect(processPixel(0.5, 0.5, 0.5, dark, vignetteMask(0, 0))[0]).toBeCloseTo(0, 6);
+    const light = uniformsFor(applyPartial(defaultRecipe(), { vignette: 100 }));
+    expect(processPixel(0.5, 0.5, 0.5, light, vignetteMask(0, 0))[0]).toBeCloseTo(1, 6);
+    expect(processPixel(0.5, 0.5, 0.5, light, 0.5)[0]).toBeGreaterThan(0.5);
   });
 
   it("saturation -100 is greyscale; hue shifts move colours", () => {

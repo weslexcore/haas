@@ -92,7 +92,7 @@ export const CONCEPTS: Concept[] = [
     term: "Edit recipes",
     explanation:
       "Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, " +
-      "contrast, highlights, shadows, whites, blacks, vibrance, saturation, a tone curve, HSL per colour band, " +
+      "contrast, highlights, shadows, whites, blacks, vibrance, saturation, a post-crop vignette, a tone curve, HSL per colour band, " +
       "and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply " +
       "them at full resolution. A photo with default settings is unedited.",
   },

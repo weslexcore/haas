@@ -23,7 +23,7 @@ import type { AppState, PhotoRecord } from "../core/state/types";
 import { targetIds } from "./context";
 
 /** Groups copied/pasted/synced by default (crop is per photo, as in Lightroom). */
-const DEFAULT_SYNC_GROUPS: SettingsGroup[] = ["wb", "basic", "presence", "toneCurve", "hsl"];
+const DEFAULT_SYNC_GROUPS: SettingsGroup[] = ["wb", "basic", "presence", "effects", "toneCurve", "hsl"];
 
 const photoIds = z
   .array(z.string())
@@ -64,8 +64,9 @@ export const adjust = defineAction({
   id: "develop.adjust",
   title: "Adjust Setting",
   description:
-    "Set (value) or nudge (delta) one Basic-panel slider on the selected photos: temperature, tint, exposure " +
-    "(stops, -5 to 5), contrast, highlights, shadows, whites, blacks, vibrance or saturation (-100 to 100). " +
+    "Set (value) or nudge (delta) one slider on the selected photos: temperature, tint, exposure " +
+    "(stops, -5 to 5), contrast, highlights, shadows, whites, blacks, vibrance, saturation or vignette (-100 to 100; " +
+    "negative vignette darkens the corners, positive lightens them). " +
     "Use delta to change each photo relative to its current setting.",
   category: "Develop",
   kind: "command",

@@ -38,7 +38,8 @@ export class WebGL2Renderer implements DevelopRenderer {
 
     for (const name of [
       "uUvTransform", "uImage", "uCurve", "uOriginal", "uWbGains", "uExposure", "uBlackPoint", "uWhitePoint",
-      "uShadows", "uHighlights", "uContrast", "uVibrance", "uSaturation", "uHslHue", "uHslSat", "uHslLum",
+      "uShadows", "uHighlights", "uContrast", "uVibrance", "uSaturation", "uVignette", "uVignetteRect",
+      "uHslHue", "uHslSat", "uHslLum",
     ]) {
       this.loc[name] = gl.getUniformLocation(this.program, name);
     }
@@ -152,6 +153,10 @@ export class WebGL2Renderer implements DevelopRenderer {
     gl.uniform1f(loc.uContrast!, u.contrast);
     gl.uniform1f(loc.uVibrance!, u.vibrance);
     gl.uniform1f(loc.uSaturation!, u.saturation);
+    gl.uniform1f(loc.uVignette!, u.vignette);
+    // With the crop ignored (crop tool) the frame is the whole image, so centre the vignette on the crop.
+    const vr = opts.ignoreCrop && !opts.original ? recipe.crop : DEFAULT_CROP;
+    gl.uniform4f(loc.uVignetteRect!, vr.x, vr.y, vr.width, vr.height);
     gl.uniform1fv(loc.uHslHue!, u.hslHue);
     gl.uniform1fv(loc.uHslSat!, u.hslSat);
     gl.uniform1fv(loc.uHslLum!, u.hslLum);

@@ -33,7 +33,9 @@ test("GPU develop pipeline matches the CPU reference", async ({ page }) => {
       color: { temperature: 40, tint: -20, vibrance: 50, saturation: -30 },
       curve: { toneCurve: [[0, 0.05], [0.3, 0.22], [0.7, 0.82], [1, 0.95]] },
       hsl: { hsl: { hue: { red: 60, blue: -80, green: 40 }, saturation: { orange: -70, aqua: 90 }, luminance: { yellow: 50, purple: -60 } } },
-      everything: { exposure: -1.2, contrast: -40, highlights: 80, shadows: -50, temperature: -60, vibrance: -40, saturation: 60, toneCurve: [[0, 0], [0.5, 0.6], [1, 1]], hsl: { hue: { magenta: 100 } } },
+      vignetteDark: { vignette: -75 },
+      vignetteLight: { vignette: 60 },
+      everything: { exposure: -1.2, contrast: -40, highlights: 80, shadows: -50, temperature: -60, vibrance: -40, saturation: 60, vignette: -50, toneCurve: [[0, 0], [0.5, 0.6], [1, 1]], hsl: { hue: { magenta: 100 } } },
     } as const;
 
     const renderer = new WebGL2Renderer(new OffscreenCanvas(1, 1));
@@ -44,7 +46,7 @@ test("GPU develop pipeline matches the CPU reference", async ({ page }) => {
       renderer.render(recipe);
       const gpu = renderer.readPixels();
       const cpu = new Uint8ClampedArray(source.data);
-      processImageData(cpu, recipe);
+      processImageData(cpu, recipe, W);
       let max = 0;
       let sum = 0;
       for (let i = 0; i < cpu.length; i += 4) {

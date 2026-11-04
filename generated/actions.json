@@ -66,7 +66,7 @@
     },
     {
       "term": "Edit recipes",
-      "explanation": "Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a tone curve, HSL per colour band, and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited."
+      "explanation": "Non-destructive develop settings stored per photo as JSON: white balance (temperature, tint), exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation, a post-crop vignette, a tone curve, HSL per colour band, and crop/straighten. Rendered on the GPU; saved with the ratings and in the XMP sidecar. Exports apply them at full resolution. A photo with default settings is unedited."
     },
     {
       "term": "Undo and transactions",
@@ -1933,7 +1933,7 @@
     {
       "id": "develop.adjust",
       "title": "Adjust Setting",
-      "description": "Set (value) or nudge (delta) one Basic-panel slider on the selected photos: temperature, tint, exposure (stops, -5 to 5), contrast, highlights, shadows, whites, blacks, vibrance or saturation (-100 to 100). Use delta to change each photo relative to its current setting.",
+      "description": "Set (value) or nudge (delta) one slider on the selected photos: temperature, tint, exposure (stops, -5 to 5), contrast, highlights, shadows, whites, blacks, vibrance, saturation or vignette (-100 to 100; negative vignette darkens the corners, positive lightens them). Use delta to change each photo relative to its current setting.",
       "category": "Develop",
       "kind": "command",
       "undoable": true,
@@ -1952,7 +1952,8 @@
               "whites",
               "blacks",
               "vibrance",
-              "saturation"
+              "saturation",
+              "vignette"
             ],
             "description": "Which slider."
           },
@@ -2360,7 +2361,7 @@
         "type": "object",
         "properties": {
           "groups": {
-            "description": "Only these groups (wb, basic, presence, toneCurve, hsl, crop). Omit for all.",
+            "description": "Only these groups (wb, basic, presence, effects, toneCurve, hsl, crop). Omit for all.",
             "minItems": 1,
             "type": "array",
             "items": {
@@ -2369,6 +2370,7 @@
                 "wb",
                 "basic",
                 "presence",
+                "effects",
                 "toneCurve",
                 "hsl",
                 "crop"
@@ -2478,6 +2480,12 @@
                 "minimum": -100,
                 "maximum": 100,
                 "description": "Saturation, -100 to 100."
+              },
+              "vignette": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100,
+                "description": "Vignette, -100 to 100."
               },
               "toneCurve": {
                 "description": "Tone curve control points [input, output], 0–1.",
@@ -2739,7 +2747,7 @@
         "type": "object",
         "properties": {
           "groups": {
-            "description": "Settings groups: wb, basic, presence, toneCurve, hsl, crop. Defaults to everything except crop.",
+            "description": "Settings groups: wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop.",
             "minItems": 1,
             "type": "array",
             "items": {
@@ -2748,6 +2756,7 @@
                 "wb",
                 "basic",
                 "presence",
+                "effects",
                 "toneCurve",
                 "hsl",
                 "crop"
@@ -2847,7 +2856,7 @@
         "type": "object",
         "properties": {
           "groups": {
-            "description": "Settings groups: wb, basic, presence, toneCurve, hsl, crop. Defaults to everything except crop.",
+            "description": "Settings groups: wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop.",
             "minItems": 1,
             "type": "array",
             "items": {
@@ -2856,6 +2865,7 @@
                 "wb",
                 "basic",
                 "presence",
+                "effects",
                 "toneCurve",
                 "hsl",
                 "crop"
