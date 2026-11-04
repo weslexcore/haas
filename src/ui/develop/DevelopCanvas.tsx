@@ -5,6 +5,7 @@ import type { Histogram } from "../../core/develop/pipeline";
 import { DEFAULT_CROP, defaultRecipe, type EditRecipe } from "../../core/develop/recipe";
 import type { PhotoRecord } from "../../core/state/types";
 import { useRuntime } from "../runtime-context";
+import { unsupportedMessage } from "../unsupported";
 import { PREVIEW_EDGE, editingBitmap } from "./bitmaps";
 import styles from "./DevelopCanvas.module.css";
 
@@ -65,7 +66,7 @@ export function DevelopCanvas({ photo, original = false, ignoreCrop = false, sca
     void editingBitmap(services.previews, photo, maxEdge).then((bitmap) => {
       const renderer = rendererRef.current;
       if (!live || !renderer) return;
-      if (!bitmap) return setError(`This browser can't display ${photo.fileName}.`);
+      if (!bitmap) return setError(unsupportedMessage(photo));
       try {
         renderer.setSource(bitmap, { width: bitmap.width, height: bitmap.height });
         setError(null);

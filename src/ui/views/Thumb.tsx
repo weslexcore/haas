@@ -4,6 +4,7 @@ import { extension } from "../../core/library/formats";
 import { fileKey } from "../../core/library/util";
 import type { PhotoRecord } from "../../core/state/types";
 import { useRuntime } from "../runtime-context";
+import { unsupportedMessage } from "../unsupported";
 import { Placeholder } from "./PhotoMeta";
 import styles from "./Thumb.module.css";
 
@@ -74,7 +75,7 @@ export function Thumb({ photo, className }: { photo: PhotoRecord; className?: st
       {url ? (
         <img src={url} alt="" draggable={false} decoding="async" />
       ) : failed ? (
-        <span className={styles.unsupported} title="No preview available in this browser">
+        <span className={styles.unsupported} title={unsupportedMessage(photo)}>
           {extension(photo.id).toUpperCase()}
         </span>
       ) : null}

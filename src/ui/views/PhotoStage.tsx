@@ -3,6 +3,7 @@ import { selectVisibleIds } from "../../core/state/selectors";
 import type { PhotoRecord } from "../../core/state/types";
 import { useAppState, useDispatch } from "../hooks";
 import { useRuntime } from "../runtime-context";
+import { unsupportedMessage } from "../unsupported";
 import { FlagMark, LabelDot, Placeholder, Stars, formatCaptured, formatExposure } from "./PhotoMeta";
 import { defaultRecipe } from "../../core/develop/recipe";
 import { CropBar } from "../develop/CropBar";
@@ -123,7 +124,7 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
       {photo.placeholderHue !== undefined ? (
         <Placeholder photo={photo} className={`${styles.placeholder} ${dimmed ? styles.dimmed : ""}`} />
       ) : unsupported ? (
-        <p className={styles.message}>This browser can't display {photo.fileName}.</p>
+        <p className={styles.message}>{unsupportedMessage(photo)}</p>
       ) : url ? (
         <img
           key={url}
