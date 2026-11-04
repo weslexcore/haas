@@ -1,4 +1,4 @@
-/** Image types the app lists. RAW arrives later (LibRaw/WASM). */
+/** Image types the browser decodes itself. */
 export const IMAGE_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -9,13 +9,70 @@ export const IMAGE_TYPES: Record<string, string> = {
   heif: "image/heif",
 };
 
+/** Camera RAW types, decoded with LibRaw (WebAssembly). */
+export const RAW_TYPES: Record<string, string> = {
+  "3fr": "image/x-hasselblad-3fr",
+  arw: "image/x-sony-arw",
+  cr2: "image/x-canon-cr2",
+  cr3: "image/x-canon-cr3",
+  crw: "image/x-canon-crw",
+  dng: "image/x-adobe-dng",
+  erf: "image/x-epson-erf",
+  iiq: "image/x-phaseone-iiq",
+  kdc: "image/x-kodak-kdc",
+  mos: "image/x-leaf-mos",
+  mrw: "image/x-minolta-mrw",
+  nef: "image/x-nikon-nef",
+  nrw: "image/x-nikon-nrw",
+  orf: "image/x-olympus-orf",
+  pef: "image/x-pentax-pef",
+  raf: "image/x-fuji-raf",
+  rw2: "image/x-panasonic-rw2",
+  rwl: "image/x-leica-rwl",
+  sr2: "image/x-sony-sr2",
+  srf: "image/x-sony-srf",
+  srw: "image/x-samsung-srw",
+  x3f: "image/x-sigma-x3f",
+};
+
+const RAW_MIME_TYPES = new Set(Object.values(RAW_TYPES));
+
 export function extension(path: string): string {
   const name = path.slice(path.lastIndexOf("/") + 1);
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
 }
 
-export const imageMimeType = (path: string): string | null => IMAGE_TYPES[extension(path)] ?? null;
+/** MIME type of a photo file the app lists (browser image or RAW), else null. */
+export const imageMimeType = (path: string): string | null => IMAGE_TYPES[extension(path)] ?? RAW_TYPES[extension(path)] ?? null;
+
+export const isRawPath = (path: string) => extension(path) in RAW_TYPES;
+export const isRawMimeType = (mimeType: string | undefined) => !!mimeType && RAW_MIME_TYPES.has(mimeType);
+
+/** "a/DSC_1.ARW" → "a/dsc_1": photos with the same key are one shot in two formats. */
+const shotKey = (path: string) => {
+  const dot = path.lastIndexOf(".");
+  return (dot > path.lastIndexOf("/") ? path.slice(0, dot) : path).toLowerCase();
+};
+
+/**
+ * RAW+JPEG pairs (as cameras write them) are one photo, as in Lightroom: the
+ * RAW is listed and the JPEG travels with it like a sidecar (moved to and
+ * from _Rejected together). Returns the paths to list, and each listed RAW's
+ * companion.
+ */
+export function pairRawWithJpeg(paths: string[]): { photos: string[]; companions: Map<string, string> } {
+  const raws = new Map<string, string>();
+  for (const p of paths) if (isRawPath(p)) raws.set(shotKey(p), p);
+  const companions = new Map<string, string>();
+  const photos: string[] = [];
+  for (const p of paths) {
+    const raw = !isRawPath(p) && IMAGE_TYPES[extension(p)] ? raws.get(shotKey(p)) : undefined;
+    if (raw && !companions.has(raw)) companions.set(raw, p);
+    else photos.push(p);
+  }
+  return { photos, companions };
+}
 
 export const isSidecarPath = (path: string) => extension(path) === "xmp";
 

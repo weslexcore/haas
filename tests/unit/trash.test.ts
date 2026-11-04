@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { MemorySource } from "../../src/adapters/memory-source";
+import { pairRawWithJpeg } from "../../src/core/library/formats";
 import { paramsJsonSchema } from "../../src/core/manifest/build-manifest";
 import { writeXmp } from "../../src/core/xmp/xmp";
 import { requiresParams } from "../../src/core/actions/dispatcher";
@@ -178,5 +179,35 @@ describe("undo and redo of removal", () => {
     await rt.dispatch("library.rejected.remove");
     await rt.dispatch("library.removed.empty", { confirm: true });
     expect(rt.history.canUndo).toBe(false);
+  });
+});
+
+describe("RAW+JPEG pairs", () => {
+  it("pairs a RAW with a JPEG of the same name (any case), and only then", () => {
+    const { photos, companions } = pairRawWithJpeg(["a/DSC_1.ARW", "a/dsc_1.jpg", "DSC_1.jpg", "IMG_2.jpg", "IMG_3.CR3", "IMG_3.xmp"]);
+    expect(photos).toEqual(["a/DSC_1.ARW", "DSC_1.jpg", "IMG_2.jpg", "IMG_3.CR3", "IMG_3.xmp"]);
+    expect([...companions]).toEqual([["a/DSC_1.ARW", "a/dsc_1.jpg"]]);
+  });
+
+  it("lists the pair once, and moves and restores the JPEG with the RAW", async () => {
+    const rt = await createTestRuntime({ loadSample: false });
+    const source = new MemorySource({ id: "f2", name: "Raw", kind: "memory", writable: true }, {
+      "DSC_1.NEF": "raw",
+      "DSC_1.JPG": "jpeg",
+      "DSC_2.NEF": "raw2",
+    });
+    rt.library.nextPick = source;
+    await rt.dispatch("library.folder.open");
+    expect(ids(rt)).toEqual(["DSC_1.NEF", "DSC_2.NEF"]);
+    expect(rt.store.getState().photos.byId["DSC_1.NEF"]).toMatchObject({ mimeType: "image/x-nikon-nef", companion: "DSC_1.JPG" });
+
+    await rt.dispatch("library.flag.set", { flag: "reject", photoIds: ["DSC_1.NEF"] });
+    await rt.dispatch("library.rejected.remove");
+    expect([...source.files.keys()].filter((p) => !p.endsWith(".xmp")).sort()).toEqual(["DSC_2.NEF", "_Rejected/DSC_1.JPG", "_Rejected/DSC_1.NEF"]);
+
+    await rt.dispatch("history.undo");
+    expect(source.files.has("DSC_1.JPG")).toBe(true);
+    expect(source.files.has("DSC_1.NEF")).toBe(true);
+    expect(ids(rt)).toEqual(["DSC_1.NEF", "DSC_2.NEF"]);
   });
 });
