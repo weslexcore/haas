@@ -136,6 +136,35 @@ test.describe("layout: resizable and dockable panels (sample library)", () => {
     expect((await box(panel(page))).x).toBeLessThan((await box(canvas(page))).x);
   });
 
+  test("filmstrip hides from its button and comes back from the bottom bar, in Develop and Loupe", async ({ page }) => {
+    await page.getByRole("button", { name: "Hide filmstrip" }).click();
+    await expect(filmstrip(page)).toHaveCount(0);
+    const show = page.getByRole("button", { name: "Show filmstrip" });
+    await expect(show).toBeVisible();
+    expect((await box(show)).y).toBeGreaterThan(700); // along the bottom edge
+
+    await page.keyboard.press("e");
+    await expect(page.getByRole("main", { name: "loupe view" })).toBeVisible();
+    await expect(filmstrip(page)).toHaveCount(0);
+    await page.getByRole("button", { name: "Show filmstrip" }).click();
+    await expect(filmstrip(page)).toBeVisible();
+    await page.keyboard.press("F6");
+    await expect(filmstrip(page)).toHaveCount(0);
+  });
+
+  test("F7 undocks and docks the panel, Shift+F7 swaps its side", async ({ page }) => {
+    await page.keyboard.press("F7");
+    const floating = page.getByRole("dialog", { name: "Develop panel (floating)" });
+    await expect(floating).toBeVisible();
+    await page.keyboard.press("F7");
+    await expect(floating).toHaveCount(0);
+    expect((await box(panel(page))).x).toBeGreaterThan((await box(canvas(page))).x);
+    await page.keyboard.press("Shift+F7");
+    expect((await box(panel(page))).x).toBeLessThan((await box(canvas(page))).x);
+    await page.keyboard.press("Shift+F7");
+    expect((await box(panel(page))).x).toBeGreaterThan((await box(canvas(page))).x);
+  });
+
   test("layout actions are scriptable and remembered", async ({ page }) => {
     await page.evaluate(async () => {
       await window.photo!.dispatch("view.panel.side.set", { side: "left" });

@@ -14,6 +14,8 @@ const PATHS = {
   panelLeft: "M3 5h18v14H3zM9 5v14",
   panelRight: "M3 5h18v14H3zM15 5v14",
   float: "M8 4h12v12M4 8h12v12H4z",
+  chevronDown: "m6 9 6 6 6-6",
+  chevronUp: "m6 15 6-6 6 6",
 } as const;
 
 export type IconName = keyof typeof PATHS;

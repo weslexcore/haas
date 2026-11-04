@@ -1,9 +1,55 @@
 /* Height comes from state (layout.filmstripHeight); the resize handle above draws the top border. */
-.strip {
+.wrap {
+  position: relative;
   flex-shrink: 0;
+  background: var(--surface-panel);
+}
+
+.strip {
+  height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+/* Hide / show buttons */
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}
+
+.toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.hide {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  opacity: 0.7;
+}
+
+.hide:hover,
+.hide:focus-visible {
+  opacity: 1;
+}
+
+.collapsed {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 2px 0;
   background: var(--surface-panel);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .canvas {

@@ -1,5 +1,5 @@
 import { useAppState } from "../hooks";
-import { Filmstrip } from "./Filmstrip";
+import { Filmstrip, FilmstripCollapsed } from "./Filmstrip";
 import { PhotoStage } from "./PhotoStage";
 import styles from "./LoupeView.module.css";
 
@@ -8,7 +8,7 @@ export function LoupeView() {
   return (
     <div className={styles.layout}>
       <PhotoStage zoomable />
-      {filmstrip && <Filmstrip />}
+      {filmstrip ? <Filmstrip /> : <FilmstripCollapsed />}
     </div>
   );
 }

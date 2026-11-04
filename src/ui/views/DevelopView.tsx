@@ -8,7 +8,7 @@ import { LAYOUT_LIMITS } from "../../core/state/layout";
 import { useAppState, useDispatch } from "../hooks";
 import { DockablePanel } from "../layout/DockablePanel";
 import { ResizeHandle } from "../layout/ResizeHandle";
-import { Filmstrip } from "./Filmstrip";
+import { Filmstrip, FilmstripCollapsed } from "./Filmstrip";
 import { InfoOverlay } from "./PhotoStage";
 import styles from "./DevelopView.module.css";
 
@@ -71,7 +71,7 @@ export function DevelopView() {
           {beforeAfter && <span className={styles.badge}>Before</span>}
           {info && <InfoOverlay photo={photo} />}
         </div>
-        {filmstrip && <Filmstrip />}
+        {filmstrip ? <Filmstrip /> : <FilmstripCollapsed />}
       </div>
       {panelDocked && panelSide === "right" && (
         <>

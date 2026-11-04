@@ -1050,7 +1050,11 @@
       "undoable": false,
       "params": null,
       "examples": [],
-      "defaultShortcuts": [],
+      "defaultShortcuts": [
+        {
+          "keys": "f7"
+        }
+      ],
       "availability": "Always available."
     },
     {
@@ -1126,7 +1130,11 @@
       "undoable": false,
       "params": null,
       "examples": [],
-      "defaultShortcuts": [],
+      "defaultShortcuts": [
+        {
+          "keys": "shift+f7"
+        }
+      ],
       "availability": "Always available."
     },
     {

@@ -3,8 +3,9 @@ import { memo, useEffect, useRef, type MouseEvent } from "react";
 import { LAYOUT_LIMITS } from "../../core/state/layout";
 import { selectVisibleIds } from "../../core/state/selectors";
 import type { PhotoRecord } from "../../core/state/types";
-import { useAppState, useDispatch } from "../hooks";
+import { useAppState, useDispatch, useShortcut } from "../hooks";
 import { ResizeHandle } from "../layout/ResizeHandle";
+import { Icon } from "../shell/Icon";
 import { usePhotoInteractions } from "./photo-interactions";
 import { FlagMark, LabelDot } from "./PhotoMeta";
 import { Thumb } from "./Thumb";
@@ -53,26 +54,55 @@ export function Filmstrip() {
         onResize={(h) => void dispatch("view.filmstrip.resize", { height: h })}
         onReset={() => void dispatch("view.filmstrip.resize")}
       />
-      <div ref={scrollRef} className={styles.strip} style={{ height }} role="list" aria-label="Filmstrip">
-        <div className={styles.canvas} style={{ width: virtualizer.getTotalSize() }}>
-          {virtualizer.getVirtualItems().map((item) => {
-            const id = visible[item.index]!;
-            return (
-              <FilmstripItem
-                key={id}
-                photo={byId[id]!}
-                start={item.start}
-                width={itemWidth}
-                selected={selected.has(id)}
-                active={id === activeId}
-                onSelect={select}
-                onMenu={openMenu}
-              />
-            );
-          })}
+      <div className={styles.wrap} style={{ height }}>
+        <div ref={scrollRef} className={styles.strip} role="list" aria-label="Filmstrip">
+          <div className={styles.canvas} style={{ width: virtualizer.getTotalSize() }}>
+            {virtualizer.getVirtualItems().map((item) => {
+              const id = visible[item.index]!;
+              return (
+                <FilmstripItem
+                  key={id}
+                  photo={byId[id]!}
+                  start={item.start}
+                  width={itemWidth}
+                  selected={selected.has(id)}
+                  active={id === activeId}
+                  onSelect={select}
+                  onMenu={openMenu}
+                />
+              );
+            })}
+          </div>
         </div>
+        <FilmstripToggle hidden={false} className={styles.hide} />
       </div>
     </>
+  );
+}
+
+/** The slim bar left along the bottom when the filmstrip is hidden; its button brings the strip back. */
+export function FilmstripCollapsed() {
+  return (
+    <div className={styles.collapsed}>
+      <FilmstripToggle hidden />
+    </div>
+  );
+}
+
+function FilmstripToggle({ hidden, className }: { hidden: boolean; className?: string }) {
+  const dispatch = useDispatch();
+  const shortcut = useShortcut("view.filmstrip.toggle");
+  const label = hidden ? "Show filmstrip" : "Hide filmstrip";
+  return (
+    <button
+      type="button"
+      className={`${styles.toggle} ${className ?? ""}`}
+      aria-label={label}
+      title={shortcut ? `${label} (${shortcut.strokes.join(" ")})` : label}
+      onClick={() => void dispatch("view.filmstrip.toggle")}
+    >
+      <Icon name={hidden ? "chevronUp" : "chevronDown"} size={14} />
+    </button>
   );
 }
 

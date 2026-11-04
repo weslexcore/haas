@@ -39,6 +39,7 @@ export const togglePanelSide = defineAction({
   category: "View",
   kind: "command",
   sideEffects: true,
+  defaultShortcuts: [{ keys: "shift+f7" }],
   async run(_, ctx) {
     const r = await ctx.dispatch(setPanelSide.id, { side: ctx.state.layout.panelSide === "left" ? "right" : "left" });
     if (!r.ok) throw new Error(r.message);
@@ -100,6 +101,7 @@ export const togglePanelDock = defineAction({
   category: "View",
   kind: "command",
   sideEffects: true,
+  defaultShortcuts: [{ keys: "f7" }],
   async run(_, ctx) {
     const r = await ctx.dispatch(ctx.state.layout.panelDocked ? undockPanel.id : dockPanel.id);
     if (!r.ok) throw new Error(r.message);

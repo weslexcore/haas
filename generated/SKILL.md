@@ -462,7 +462,7 @@ Examples:
 
 #### Dock / Undock Develop Panel: `view.panel.dock.toggle`
 
-Command
+Command · Shortcuts: `f7`
 
 Float the Develop controls panel if it is docked, or dock it back to its side if it is floating.
 
@@ -503,7 +503,7 @@ Examples:
 
 #### Move Develop Panel to Other Side: `view.panel.side.toggle`
 
-Command
+Command · Shortcuts: `shift+f7`
 
 Swap the Develop controls panel between the left and right edges of the window (docking it first if it is floating).
 
