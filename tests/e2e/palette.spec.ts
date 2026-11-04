@@ -44,7 +44,8 @@ test("shows the user's current shortcut, not just the default", async ({ page })
   await expect(page.getByRole("list", { name: "Photos" })).toBeVisible();
   await page.keyboard.press("ControlOrMeta+k");
   await page.keyboard.type("toggle light");
-  await expect(palette(page).getByRole("option").first().locator("kbd")).toHaveText(["⇧T"]);
+  // "⇧T" on macOS, "Shift+T" elsewhere (CI runs on Linux)
+  await expect(palette(page).getByRole("option").first().locator("kbd")).toHaveText([/^(⇧T|Shift\+T)$/]);
 });
 
 test("recently used actions come first", async ({ page }) => {
