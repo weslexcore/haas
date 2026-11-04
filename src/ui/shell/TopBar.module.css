@@ -26,6 +26,13 @@
   color: var(--text-secondary);
 }
 
+.folderName {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .folderButton:hover {
   background: var(--surface-hover);
   color: var(--text-primary);

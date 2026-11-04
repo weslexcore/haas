@@ -22,21 +22,27 @@ export const AUTO_TONE_SLIDERS = ["exposure", "contrast", "highlights", "shadows
 
 const GRID = 64;
 /** Targets for the output, in display (sRGB) luminance. */
-const TARGET = { white: 0.93, black: 0.04, spread: 0.62 };
+const TARGET = { white: 0.93, black: 0.04, spread: 0.66 };
 /**
  * Mid-tones in this range count as well exposed, and exposure isn't moved;
  * outside it the median is brought just inside. (Chasing one exact median
  * would darken a full-range photo, compressing highlights that Whites can't
- * recover.)
+ * recover, and brighten every low-key one.)
  */
-const MEDIAN_BAND = { low: 0.38, high: 0.55, margin: 0.02 };
+const MEDIAN_BAND = { low: 0.3, high: 0.55, margin: 0.02 };
+/**
+ * Brightening stops once this much more of the frame is near white than
+ * before: Highlights can't bring blown areas back, so a dark photo with bright
+ * parts (a window, the sky) stays darker rather than losing them.
+ */
+const HIGHLIGHT_BUDGET = { level: 0.98, extra: 0.005 };
 /**
  * How far Auto may move the white and black points. They only stretch the
  * range (whites up, blacks down): clipping is the highlight and shadow
  * sliders' job, and a photo with no real highlights (fog, a night scene)
  * shouldn't get the slider's extreme.
  */
-const WHITES_RANGE = [0, 60] as const;
+const WHITES_RANGE = [0, 40] as const;
 const BLACKS_RANGE = [-60, 0] as const;
 /** Output luminance counted as clipped, for highlight and shadow recovery. */
 const CLIPPED = { high: 0.99, low: 0.01 };
@@ -159,11 +165,13 @@ export function autoTone(samples: Float32Array, base: EditRecipe): Pick<PartialR
   const at = (patch: Partial<EditRecipe>) => evaluate(samples, { ...r, ...patch });
 
   const median = (ev: number) => percentile(at({ exposure: ev }).luma, 0.5);
+  const nearWhite = (ev: number) => fraction(at({ exposure: ev }).luma, (v) => v > HIGHLIGHT_BUDGET.level);
   const fitExposure = (lo: number, hi: number, start: number) => {
     const m = median(start);
     if (m >= MEDIAN_BAND.low && m <= MEDIAN_BAND.high) return start;
-    const target = m < MEDIAN_BAND.low ? MEDIAN_BAND.low + MEDIAN_BAND.margin : MEDIAN_BAND.high - MEDIAN_BAND.margin;
-    return snap("exposure", solve(median, lo, hi, target));
+    if (m > MEDIAN_BAND.high) return snap("exposure", solve(median, lo, hi, MEDIAN_BAND.high - MEDIAN_BAND.margin));
+    const cap = solve(nearWhite, start, hi, nearWhite(start) + HIGHLIGHT_BUDGET.extra);
+    return snap("exposure", solve(median, lo, cap, MEDIAN_BAND.low + MEDIAN_BAND.margin));
   };
   r.exposure = fitExposure(-3, 3, 0);
 
@@ -179,7 +187,7 @@ export function autoTone(samples: Float32Array, base: EditRecipe): Pick<PartialR
 
   stats = at({});
   const spread = percentile(stats.luma, 0.9) - percentile(stats.luma, 0.1);
-  r.contrast = snap("contrast", clamp((TARGET.spread - spread) * 120, -30, 40));
+  r.contrast = snap("contrast", clamp((TARGET.spread - spread) * 120, -15, 30));
 
   // The other settings move the mid-tones a little: refit exposure around its first value.
   r.exposure = fitExposure(r.exposure - 1, r.exposure + 1, r.exposure);

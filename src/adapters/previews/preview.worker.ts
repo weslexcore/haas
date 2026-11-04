@@ -109,8 +109,11 @@ async function thumbnail(task: Extract<PreviewTask, { type: "thumbnail" }>): Pro
   if (file instanceof ImageBitmap) {
     bitmap = file;
   } else if (given) {
-    // Orientation is given: decode the pixels as stored.
-    bitmap = await createImageBitmap(file, { imageOrientation: "none" }).catch(() => null);
+    // Orientation is given. Browsers apply a JPEG's own EXIF orientation whatever
+    // imageOrientation says (Chromium ignores "none"), so rotate here only when the
+    // preview doesn't carry one.
+    bitmap = await createImageBitmap(file).catch(() => null);
+    if (((await exifr.orientation(file).catch(() => 1)) ?? 1) !== 1) needsOrientation = false;
   } else {
     // Embedded EXIF thumbnails are usually ~160px: only good enough for small sizes.
     try {

@@ -223,8 +223,20 @@ describe("auto", () => {
     for (let i = 0; i < samples.length; i += 3) out.push(luma(processPixel(samples[i]!, samples[i + 1]!, samples[i + 2]!, u)));
     out.sort((x, y) => x - y);
     const median = out[out.length >> 1]!;
-    expect(median).toBeGreaterThan(0.37);
+    expect(median).toBeGreaterThan(0.29);
     expect(median).toBeLessThan(0.56);
+  });
+
+  it("doesn't blow out a bright area to brighten a dark photo", () => {
+    // A dark room with a bright window: lifting the room to the band would clip the window.
+    const img = makeImage(64, 48, (x, y) => (x > 0.6 && y < 0.4 ? [215, 215, 215] : [20, 20, 20]));
+    const s = autoSettings(img, defaultRecipe(), ["tone"]);
+    expect(s.exposure!).toBeGreaterThan(0);
+    const u = uniformsFor({ ...defaultRecipe(), ...s } as EditRecipe);
+    const samples = samplePixels(img, DEFAULT_CROP);
+    let blown = 0;
+    for (let i = 0; i < samples.length; i += 3) if (luma(processPixel(samples[i]!, samples[i + 1]!, samples[i + 2]!, u)) > 0.995) blown++;
+    expect(blown / (samples.length / 3)).toBeLessThan(0.01);
   });
 
   it("neutralises a colour cast", () => {

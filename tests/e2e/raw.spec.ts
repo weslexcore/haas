@@ -11,6 +11,15 @@ const canvas = (page: Page) => page.getByRole("main").locator("canvas").first();
 const scene = (_W: number, H: number) => (_x: number, y: number): [number, number, number] =>
   y < H / 2 ? [0.5, 0.08, 0.08] : [0.08, 0.08, 0.5];
 
+/** A JPEG with an EXIF Orientation tag, like the previews Fujifilm embeds in RAF files. */
+function withExifOrientation(jpeg: Uint8Array, orientation: number): Uint8Array {
+  // APP1 "Exif\0\0", then a little-endian TIFF header and IFD0 with one entry: Orientation (0x0112), SHORT.
+  const tiff = [0x49, 0x49, 0x2a, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, orientation, 0, 0, 0, 0, 0, 0, 0];
+  const app1 = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
+  const length = app1.length + 2;
+  return Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, length >> 8, length & 0xff, ...app1, ...jpeg.slice(2)]);
+}
+
 /** Mean RGB of a rectangle of a rendered canvas (fractions of its size). */
 function meanRgb(c: Locator, x0: number, y0: number, x1: number, y1: number): Promise<number[]> {
   return c.evaluate(
@@ -43,6 +52,11 @@ async function seedRaw(page: Page) {
     }),
     // No embedded preview, stored landscape, displayed portrait.
     "RAW_0002.dng": buildDng({ width: 600, height: 400, pixel: scene(600, 400), orientation: 6, date: "2026:09:14 09:31:00" }),
+    // Displayed portrait, with an embedded preview that carries its own orientation too.
+    "RAW_0004.dng": buildDng({
+      width: 600, height: 400, pixel: scene(600, 400), orientation: 6, date: "2026:09:14 09:33:00",
+      preview: { jpeg: withExifOrientation(Uint8Array.from(preview), 6), width: 1800, height: 1200 },
+    }),
     // A RAW+JPEG pair: one photo.
     "PAIR_0003.dng": buildDng({ width: 600, height: 400, pixel: scene(600, 400), date: "2026:09:14 09:32:00" }),
     "PAIR_0003.JPG": "not decoded: travels with the RAW",
@@ -91,7 +105,7 @@ test.beforeEach(async ({ page }) => {
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
   await seedRaw(page);
   await page.getByRole("button", { name: "Open Folder…" }).first().click();
-  await expect(grid(page).getByRole("listitem")).toHaveCount(3); // the pair's JPEG isn't listed
+  await expect(grid(page).getByRole("listitem")).toHaveCount(4); // the pair's JPEG isn't listed
   await expect(status(page)).not.toContainText("Reading EXIF");
 });
 
@@ -103,6 +117,11 @@ test("RAW files: thumbnails, EXIF and size from LibRaw, embedded preview in Loup
   await expect(thumb2).toBeVisible();
   const size2 = await thumb2.evaluate((el: HTMLImageElement) => [el.naturalWidth, el.naturalHeight]);
   expect(size2[1]).toBeGreaterThan(size2[0]!);
+  // An embedded preview with its own EXIF orientation is rotated once, not twice.
+  const thumb4 = cell(page, "RAW_0004.dng").locator("img");
+  await expect(thumb4).toBeVisible();
+  const size4 = await thumb4.evaluate((el: HTMLImageElement) => [el.naturalWidth, el.naturalHeight]);
+  expect(size4[1]).toBeGreaterThan(size4[0]!);
 
   await cell(page, "RAW_0001.dng").dblclick();
   await page.keyboard.press("i");
@@ -121,6 +140,13 @@ test("RAW files: thumbnails, EXIF and size from LibRaw, embedded preview in Loup
   });
   expect(loupe[0]).toBe(1800); // the embedded preview
   expect(loupe[1][1]).toBeGreaterThan(150); // green
+
+  // A preview with its own EXIF orientation is rotated once, not twice.
+  for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight"); // past RAW_0002 and the pair
+  const portrait = page.getByRole("img", { name: "RAW_0004.dng" });
+  await expect(portrait).toBeVisible();
+  const loupe4 = await portrait.evaluate(async (el: HTMLImageElement) => (await el.decode(), [el.naturalWidth, el.naturalHeight]));
+  expect(loupe4).toEqual([1200, 1800]);
 });
 
 test("RAW files: Develop demosaics the sensor data, upright, and exports", async ({ page }) => {
@@ -159,5 +185,5 @@ test("RAW+JPEG pairs are one photo: the JPEG moves with the RAW", async ({ page 
   await page.keyboard.press("ControlOrMeta+z"); // undo: both come back
   await expect.poll(() => exists(page, "PAIR_0003.JPG")).toBe(true);
   expect(await exists(page, "PAIR_0003.dng")).toBe(true);
-  await expect(status(page)).toContainText("3 photos");
+  await expect(status(page)).toContainText("4 photos");
 });
