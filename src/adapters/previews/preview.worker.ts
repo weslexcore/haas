@@ -99,36 +99,39 @@ function orient(ctx: OffscreenCanvasRenderingContext2D, o: number, w: number, h:
   if (m) ctx.transform(...m);
 }
 
-async function thumbnail(file: Blob, maxSize: number): Promise<ThumbnailResult | null> {
-  let orientation = 1;
+async function thumbnail(task: Extract<PreviewTask, { type: "thumbnail" }>): Promise<ThumbnailResult | null> {
+  const { file, maxSize } = task;
+  const given = task.orientation !== undefined;
+  let orientation = task.orientation ?? 1;
+  let needsOrientation = given;
   let bitmap: ImageBitmap | null = null;
-  let needsOrientation = false;
 
-  // Embedded EXIF thumbnails are usually ~160px: only good enough for small sizes.
-  try {
-    const embedded = await exifr.thumbnail(file);
-    if (embedded && embedded.byteLength > 2000) {
-      const b = await createImageBitmap(new Blob([embedded as BlobPart], { type: "image/jpeg" }));
-      if (Math.max(b.width, b.height) >= maxSize) {
-        bitmap = b;
-        needsOrientation = true;
-        orientation = (await exifr.orientation(file).catch(() => 1)) ?? 1;
-      } else b.close();
-    }
-  } catch {
-    // fall through to a full decode
-  }
-
-  if (!bitmap) {
+  if (file instanceof ImageBitmap) {
+    bitmap = file;
+  } else if (given) {
+    // Orientation is given: decode the pixels as stored.
+    bitmap = await createImageBitmap(file, { imageOrientation: "none" }).catch(() => null);
+  } else {
+    // Embedded EXIF thumbnails are usually ~160px: only good enough for small sizes.
     try {
-      // Full decode applies EXIF orientation itself ("from-image" is the default).
-      bitmap = await createImageBitmap(file, { resizeWidth: maxSize * 2, resizeQuality: "medium" }).catch(() =>
-        createImageBitmap(file),
-      );
+      const embedded = await exifr.thumbnail(file);
+      if (embedded && embedded.byteLength > 2000) {
+        const b = await createImageBitmap(new Blob([embedded as BlobPart], { type: "image/jpeg" }));
+        if (Math.max(b.width, b.height) >= maxSize) {
+          bitmap = b;
+          needsOrientation = true;
+          orientation = (await exifr.orientation(file).catch(() => 1)) ?? 1;
+        } else b.close();
+      }
     } catch {
-      return null; // unsupported format in this browser
+      // fall through to a full decode
     }
+    // Full decode applies EXIF orientation itself ("from-image" is the default).
+    bitmap ??= await createImageBitmap(file, { resizeWidth: maxSize * 2, resizeQuality: "medium" })
+      .catch(() => createImageBitmap(file))
+      .catch(() => null); // unsupported format in this browser
   }
+  if (!bitmap) return null;
 
   const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
@@ -139,12 +142,12 @@ async function thumbnail(file: Blob, maxSize: number): Promise<ThumbnailResult |
   if (needsOrientation) orient(ctx, orientation, w, h);
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
-  const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
+  const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: task.quality ?? 0.82 });
   return { blob, width: canvas.width, height: canvas.height };
 }
 
 async function run(task: PreviewTask): Promise<unknown> {
-  return task.type === "thumbnail" ? thumbnail(task.file, task.maxSize) : index(task.file, task.mimeType);
+  return task.type === "thumbnail" ? thumbnail(task) : index(task.file, task.mimeType);
 }
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {

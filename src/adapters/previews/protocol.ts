@@ -1,7 +1,16 @@
 import type { PhotoIndexData } from "../../core/services";
 
 export type PreviewTask =
-  | { type: "thumbnail"; file: Blob; maxSize: number }
+  | {
+      type: "thumbnail";
+      /** An image file, or already-decoded pixels (e.g. a RAW decode). */
+      file: Blob | ImageBitmap;
+      maxSize: number;
+      /** EXIF orientation to apply, for images that don't carry their own (RAW embedded previews). */
+      orientation?: number;
+      /** JPEG quality of the result (default 0.82). */
+      quality?: number;
+    }
   | { type: "index"; file: Blob; mimeType: string };
 
 export interface ThumbnailResult {

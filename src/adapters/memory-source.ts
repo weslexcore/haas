@@ -1,4 +1,4 @@
-import { EXPORTS_DIR, TRASH_DIR, imageMimeType, sidecarCandidates, trashPath, uniqueName } from "../core/library/formats";
+import { EXPORTS_DIR, TRASH_DIR, imageMimeType, pairRawWithJpeg, sidecarCandidates, trashPath, uniqueName } from "../core/library/formats";
 import type { FileOpResult, PhotoSource, SourceFile } from "../core/services";
 import type { FolderInfo } from "../core/state/types";
 
@@ -26,16 +26,27 @@ export class MemorySource implements PhotoSource {
   }
 
   private list(include: (path: string) => boolean, rename: (path: string) => string = (p) => p): SourceFile[] {
-    return [...this.files]
-      .filter(([path]) => imageMimeType(path) && include(path))
-      .map(([full, f]) => ({
-        path: rename(full),
-        name: full.slice(full.lastIndexOf("/") + 1),
-        size: f.data.size,
-        lastModified: f.lastModified,
-        mimeType: imageMimeType(full)!,
-      }))
+    const { photos, companions } = pairRawWithJpeg([...this.files.keys()].filter((path) => imageMimeType(path) && include(path)));
+    return photos
+      .map((full) => {
+        const f = this.files.get(full)!;
+        const file: SourceFile = {
+          path: rename(full),
+          name: full.slice(full.lastIndexOf("/") + 1),
+          size: f.data.size,
+          lastModified: f.lastModified,
+          mimeType: imageMimeType(full)!,
+        };
+        const companion = companions.get(full);
+        if (companion) file.companion = rename(companion);
+        return file;
+      })
       .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
+  }
+
+  /** The JPEG of a RAW+JPEG pair. */
+  private companionOf(photoPath: string): string | undefined {
+    return pairRawWithJpeg([...this.files.keys()].filter((p) => imageMimeType(p))).companions.get(photoPath);
   }
 
   async getFile(path: string): Promise<File> {
@@ -75,8 +86,10 @@ export class MemorySource implements PhotoSource {
       try {
         if (!this.files.has(path)) throw new Error("Not in this folder");
         const sidecar = this.sidecarPath(path);
+        const companion = this.companionOf(path);
         this.move(path, trashPath(path));
         if (sidecar) this.move(sidecar, trashPath(sidecar));
+        if (companion) this.move(companion, trashPath(companion));
         result.done.push(path);
       } catch (e) {
         result.failed.push({ path, error: e instanceof Error ? e.message : String(e) });
@@ -94,6 +107,7 @@ export class MemorySource implements PhotoSource {
       try {
         this.move(trashPath(file.path), file.path);
         for (const c of sidecarCandidates(file.path)) if (this.files.has(trashPath(c))) this.move(trashPath(c), c);
+        if (file.companion) this.move(trashPath(file.companion), file.companion);
         result.done.push(file);
       } catch (e) {
         result.failed.push({ path: file.path, error: e instanceof Error ? e.message : String(e) });

@@ -21,6 +21,7 @@
     "dexie": "^4.4.6",
     "exifr": "^7.1.3",
     "immer": "^11.1.21",
+    "libraw-wasm": "1.6.0",
     "match-sorter": "^8.3.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

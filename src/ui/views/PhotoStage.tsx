@@ -146,7 +146,10 @@ export function InfoOverlay({ photo }: { photo: PhotoRecord }) {
   const camera = [photo.exif?.make, photo.exif?.model].filter(Boolean).join(" ");
   return (
     <div className={styles.info} aria-label="Photo information">
-      <strong>{photo.fileName}</strong>
+      <strong>
+        {photo.fileName}
+        {photo.companion && ` +${photo.companion.slice(photo.companion.lastIndexOf(".") + 1).toUpperCase()}`}
+      </strong>
       <span>{formatCaptured(photo.capturedAt)}</span>
       {photo.width && photo.height && (
         <span>
