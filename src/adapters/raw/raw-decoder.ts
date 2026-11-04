@@ -49,7 +49,31 @@ const DECODE_SETTINGS: LibRawOptions = {
 /** Drop an idle LibRaw instance (and its worker and memory) after this long. */
 const IDLE_MS = 60_000;
 
-export const rawSupported = () => typeof crossOriginIsolated !== "undefined" && crossOriginIsolated && typeof Worker !== "undefined";
+/**
+ * Why RAW decoding is unavailable on this page, or null when it works.
+ * LibRaw's threads need SharedArrayBuffer, which browsers expose only on
+ * cross-origin isolated pages: COOP/COEP headers on every response, over
+ * HTTPS or localhost.
+ */
+export function rawUnavailableReason(): string | null {
+  if (typeof Worker === "undefined") return "this browser has no Web Workers";
+  if (typeof crossOriginIsolated !== "undefined" && crossOriginIsolated) return null;
+  if (typeof isSecureContext !== "undefined" && !isSecureContext) return "the page isn't a secure context (open it over https:// or on localhost)";
+  return "the page isn't cross-origin isolated (the server must send Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp on every response)";
+}
+
+export const rawSupported = () => rawUnavailableReason() === null;
+
+let warned = false;
+/** True when RAW decoding can't run here; says why in the console, once. */
+function unavailable(): boolean {
+  const reason = rawUnavailableReason();
+  if (reason && !warned) {
+    warned = true;
+    console.warn(`RAW files can't be decoded: ${reason}.`);
+  }
+  return reason !== null;
+}
 
 /** One LibRaw instance, used by one job at a time (open + reads must not interleave). */
 class Lane {
@@ -87,6 +111,9 @@ class Lane {
 
 const bytesOf = async (file: Blob) => new Uint8Array(await file.arrayBuffer());
 
+/** LibRaw's metadata floats are single precision: 2.2 arrives as 2.200000047683716. */
+const single = (v: number) => Number(v.toPrecision(6));
+
 export class RawDecoder {
   /** Metadata and embedded previews. */
   private readonly quick = new Lane();
@@ -94,7 +121,7 @@ export class RawDecoder {
   private readonly heavy = new Lane();
 
   async info(file: Blob): Promise<RawInfo | null> {
-    if (!rawSupported()) return null;
+    if (unavailable()) return null;
     const data = await bytesOf(file);
     return this.quick.run(async (raw) => {
       await raw.open(data);
@@ -104,9 +131,9 @@ export class RawDecoder {
       if (m.camera_make) info.make = m.camera_make;
       if (m.camera_model) info.model = m.camera_model;
       if (m.iso_speed > 0) info.iso = Math.round(m.iso_speed);
-      if (m.shutter > 0) info.exposureTime = m.shutter;
-      if (m.aperture > 0) info.aperture = m.aperture;
-      if (m.focal_len > 0) info.focalLength = m.focal_len;
+      if (m.shutter > 0) info.exposureTime = single(m.shutter);
+      if (m.aperture > 0) info.aperture = single(m.aperture);
+      if (m.focal_len > 0) info.focalLength = single(m.focal_len);
       if (m.timestamp instanceof Date && m.timestamp.getTime() > 0) info.timestamp = m.timestamp;
       return info;
     });
@@ -114,7 +141,7 @@ export class RawDecoder {
 
   /** The camera's embedded JPEG preview, if it has one. */
   async preview(file: Blob): Promise<RawPreview | null> {
-    if (!rawSupported()) return null;
+    if (unavailable()) return null;
     const data = await bytesOf(file);
     return this.quick.run(async (raw) => {
       await raw.open(data);
@@ -137,7 +164,7 @@ export class RawDecoder {
    * `half` decodes at half size (each side), about four times faster.
    */
   async decode(file: Blob, opts: { half?: boolean } = {}): Promise<ImageData | null> {
-    if (!rawSupported()) return null;
+    if (unavailable()) return null;
     const data = await bytesOf(file);
     return this.heavy.run(async (raw) => {
       await raw.open(data, { ...DECODE_SETTINGS, halfSize: !!opts.half });

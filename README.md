@@ -76,14 +76,14 @@ Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, PEF and [more](src/cor
 - **Develop and Export** demosaic the sensor data: AHD, camera white balance, sRGB, rotated upright. Develop decodes at half size when that still covers the screen.
 - **RAW+JPEG pairs** with the same name are one photo, as in Lightroom: the RAW is shown (marked "+JPG" in the info overlay) and the JPEG moves with it to and from `_Rejected/`.
 
-LibRaw's WebAssembly uses threads, so the page must be **cross-origin isolated**. The dev and preview servers send the headers. A production host must send them too:
+LibRaw's WebAssembly uses threads, so the page must be **cross-origin isolated**: served over HTTPS (or on localhost) with these headers on **every** response, including `304 Not Modified` and static files (a `vite.config.ts` plugin does this for the dev and preview servers):
 
 ```
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-Without them, RAW files are listed and can be rated, but show no image.
+Without them, RAW files are listed and can be rated, but show no image; Loupe and the thumbnail's tooltip say what is missing, and the console warns once. The headers also block cross-origin images and scripts that don't opt in with CORS or `Cross-Origin-Resource-Policy`.
 
 From the devtools console: `await photo.dispatch("library.rating.set", { rating: 5 })`, or `photo.manifest()`.
 

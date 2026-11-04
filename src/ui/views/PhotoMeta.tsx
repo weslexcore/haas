@@ -51,9 +51,10 @@ export function formatExposure(exif: ExifSummary | undefined): string[] {
   if (!exif) return [];
   const parts: string[] = [];
   if (exif.focalLength) parts.push(`${Math.round(exif.focalLength)} mm`);
-  if (exif.aperture) parts.push(`ƒ/${exif.aperture}`);
+  // Values indexed from RAW files before they were rounded carry single-precision noise (2.200000047683716).
+  if (exif.aperture) parts.push(`ƒ/${Number(exif.aperture.toPrecision(3))}`);
   if (exif.exposureTime) {
-    parts.push(exif.exposureTime >= 1 ? `${exif.exposureTime}s` : `1/${Math.round(1 / exif.exposureTime)}s`);
+    parts.push(exif.exposureTime >= 1 ? `${Number(exif.exposureTime.toPrecision(3))}s` : `1/${Math.round(1 / exif.exposureTime)}s`);
   }
   if (exif.iso) parts.push(`ISO ${exif.iso}`);
   return parts;
