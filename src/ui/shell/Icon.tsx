@@ -10,6 +10,10 @@ const PATHS = {
   grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
   loupe: "M3 5h18v14H3z",
   develop: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4",
+  grip: "M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01",
+  panelLeft: "M3 5h18v14H3zM9 5v14",
+  panelRight: "M3 5h18v14H3zM15 5v14",
+  float: "M8 4h12v12M4 8h12v12H4z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -946,6 +946,36 @@
       "availability": "Available only when the current view is Develop."
     },
     {
+      "id": "view.filmstrip.resize",
+      "title": "Resize Filmstrip",
+      "description": "Set the height of the filmstrip below the photo in Loupe and Develop, in pixels (56–360). Omit the height to restore the default.",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "height": {
+            "description": "Filmstrip height in px. Omit for the default height.",
+            "type": "number"
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {
+            "height": 160
+          },
+          "description": "Show bigger filmstrip thumbnails."
+        },
+        {
+          "description": "Restore the default filmstrip height."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
       "id": "view.filmstrip.toggle",
       "title": "Toggle Filmstrip",
       "description": "Show or hide the strip of thumbnails below the photo in Loupe and Develop.",
@@ -976,6 +1006,163 @@
         }
       ],
       "availability": "Available only when the current view is Loupe or Develop."
+    },
+    {
+      "id": "view.panel.dock",
+      "title": "Dock Develop Panel",
+      "description": "Attach the floating Develop controls panel back to a window edge: the given side, or the side it was last docked to.",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "description": "Edge to dock to. Omit to use the previous side.",
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ]
+          }
+        }
+      },
+      "examples": [
+        {
+          "description": "Dock the panel where it was."
+        },
+        {
+          "params": {
+            "side": "left"
+          },
+          "description": "Dock the panel on the left."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "view.panel.dock.toggle",
+      "title": "Dock / Undock Develop Panel",
+      "description": "Float the Develop controls panel if it is docked, or dock it back to its side if it is floating.",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "view.panel.resize",
+      "title": "Resize Develop Panel",
+      "description": "Set the width of the docked Develop controls panel in pixels (220–640). Omit the width to restore the default.",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "description": "Panel width in px. Omit for the default width.",
+            "type": "number"
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {
+            "width": 380
+          },
+          "description": "Make the panel 380px wide."
+        },
+        {
+          "description": "Restore the default panel width."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "view.panel.side.set",
+      "title": "Move Develop Panel to Side",
+      "description": "Dock the Develop controls panel to the left or right edge of the window. If the panel is floating, this docks it. The choice is remembered.",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "description": "Window edge to dock the panel to."
+          }
+        },
+        "required": [
+          "side"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "side": "left"
+          },
+          "description": "Put the Develop panel on the left."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "view.panel.side.toggle",
+      "title": "Move Develop Panel to Other Side",
+      "description": "Swap the Develop controls panel between the left and right edges of the window (docking it first if it is floating).",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "view.panel.undock",
+      "title": "Undock Develop Panel",
+      "description": "Detach the Develop controls panel so it floats over the photo and can be dragged anywhere. Optionally say where to put it (viewport pixels). Dock it again with view.panel.dock.",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "description": "Left edge of the floating panel, px from the window's left.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Top edge of the floating panel, px from the window's top.",
+            "type": "number"
+          }
+        }
+      },
+      "examples": [
+        {
+          "description": "Float the panel where it last floated."
+        },
+        {
+          "params": {
+            "x": 40,
+            "y": 80
+          },
+          "description": "Float the panel near the top-left corner."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
     },
     {
       "id": "view.set",

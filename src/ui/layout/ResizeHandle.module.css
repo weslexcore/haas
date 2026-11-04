@@ -1,0 +1,45 @@
+.handle {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 1;
+  background: var(--border-subtle);
+  touch-action: none;
+  user-select: none;
+  transition: background var(--duration-fast);
+}
+
+/* The visible line is 1px; the grab area is wider. */
+.handle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.vertical {
+  width: 1px;
+  cursor: col-resize;
+}
+
+.vertical::before {
+  inset: 0 -4px;
+}
+
+.horizontal {
+  height: 1px;
+  cursor: row-resize;
+}
+
+.horizontal::before {
+  inset: -4px 0;
+}
+
+.handle:hover,
+.handle:focus-visible,
+body[data-dragging] .handle:active {
+  background: var(--accent);
+}
+
+.handle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}

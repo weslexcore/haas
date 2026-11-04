@@ -35,6 +35,27 @@ button {
   cursor: pointer;
 }
 
+/* During a drag gesture (resize handles, floating panel) nothing selects and the cursor stays put. */
+body[data-dragging] {
+  user-select: none;
+}
+
+body[data-dragging="col-resize"] * {
+  cursor: col-resize !important;
+}
+
+body[data-dragging="row-resize"] * {
+  cursor: row-resize !important;
+}
+
+body[data-dragging="grabbing"] * {
+  cursor: grabbing !important;
+}
+
+body[data-dragging="nwse-resize"] * {
+  cursor: nwse-resize !important;
+}
+
 :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;

@@ -28,6 +28,7 @@
   --duration-fast: 90ms;
   --duration-med: 160ms;
 
+  --z-float: 60;
   --z-overlay: 100;
   --z-menu: 150;
   --z-toast: 200;

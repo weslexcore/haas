@@ -410,6 +410,23 @@ In Develop, switch between showing the edited photo and the original, to compare
 
 *Available only when the current view is Develop.*
 
+#### Resize Filmstrip: `view.filmstrip.resize`
+
+Command
+
+Set the height of the filmstrip below the photo in Loupe and Develop, in pixels (56–360). Omit the height to restore the default.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `height` | number | no | Filmstrip height in px. Omit for the default height. |
+
+Examples:
+
+- `{"height":160}`: Show bigger filmstrip thumbnails.
+- `undefined`: Restore the default filmstrip height.
+
 #### Toggle Filmstrip: `view.filmstrip.toggle`
 
 Command · Shortcuts: `f6`
@@ -425,6 +442,90 @@ Command · Shortcuts: `i`
 Show or hide capture details (camera, lens, exposure, time) over the photo in Loupe and Develop.
 
 *Available only when the current view is Loupe or Develop.*
+
+#### Dock Develop Panel: `view.panel.dock`
+
+Command
+
+Attach the floating Develop controls panel back to a window edge: the given side, or the side it was last docked to.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `side` | `"left"` \| `"right"` | no | Edge to dock to. Omit to use the previous side. |
+
+Examples:
+
+- `undefined`: Dock the panel where it was.
+- `{"side":"left"}`: Dock the panel on the left.
+
+#### Dock / Undock Develop Panel: `view.panel.dock.toggle`
+
+Command
+
+Float the Develop controls panel if it is docked, or dock it back to its side if it is floating.
+
+*Always available.*
+
+#### Resize Develop Panel: `view.panel.resize`
+
+Command
+
+Set the width of the docked Develop controls panel in pixels (220–640). Omit the width to restore the default.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `width` | number | no | Panel width in px. Omit for the default width. |
+
+Examples:
+
+- `{"width":380}`: Make the panel 380px wide.
+- `undefined`: Restore the default panel width.
+
+#### Move Develop Panel to Side: `view.panel.side.set`
+
+Command
+
+Dock the Develop controls panel to the left or right edge of the window. If the panel is floating, this docks it. The choice is remembered.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `side` | `"left"` \| `"right"` | yes | Window edge to dock the panel to. |
+
+Examples:
+
+- `{"side":"left"}`: Put the Develop panel on the left.
+
+#### Move Develop Panel to Other Side: `view.panel.side.toggle`
+
+Command
+
+Swap the Develop controls panel between the left and right edges of the window (docking it first if it is floating).
+
+*Always available.*
+
+#### Undock Develop Panel: `view.panel.undock`
+
+Command
+
+Detach the Develop controls panel so it floats over the photo and can be dragged anywhere. Optionally say where to put it (viewport pixels). Dock it again with view.panel.dock.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `x` | number | no | Left edge of the floating panel, px from the window's left. |
+| `y` | number | no | Top edge of the floating panel, px from the window's top. |
+
+Examples:
+
+- `undefined`: Float the panel where it last floated.
+- `{"x":40,"y":80}`: Float the panel near the top-left corner.
 
 #### Switch View: `view.set`
 

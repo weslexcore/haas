@@ -1,10 +1,9 @@
+/* Height comes from state (layout.filmstripHeight); the resize handle above draws the top border. */
 .strip {
-  height: 96px;
   flex-shrink: 0;
   overflow-x: auto;
   overflow-y: hidden;
   background: var(--surface-panel);
-  border-top: 1px solid var(--border-subtle);
 }
 
 .canvas {

@@ -28,6 +28,8 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | Caps Lock | Auto-advance after rating/flagging (configurable: "Set Auto-Advance" in the palette) |
 | `Shift+F10`, right-click | Photo context menu |
 | `Z`, `I`, `F6` | Loupe zoom, info overlay, filmstrip |
+| Drag the filmstrip's top edge, or the Develop panel's edge | Resize them (double-click resets; arrow keys work when focused) |
+| Drag the Develop panel's header | Undock it and move it around; drop it against a window edge to dock it there (or use the header buttons / "Move Develop Panel" in the palette) |
 | `⌘L` / `Ctrl+L` | Clear filter |
 | `⌘⌫` / `Ctrl+Backspace` | Remove rejected photos (moved to `_Rejected/`; restore or delete them from the filter bar) |
 | `\` | Before/after (Develop only) |

@@ -1,5 +1,6 @@
 import { allActions } from "../actions";
 import { AUTO_ADVANCE_SETTINGS_KEY, THEME_SETTINGS_KEY } from "../actions/app";
+import { LAYOUT_SETTINGS_KEY } from "../actions/layout";
 import { BrowserDownloads } from "../adapters/browser-downloads";
 import { DexieMetadataStore, PhotoDB } from "../adapters/db";
 import { BrowserLibraryProvider } from "../adapters/library-provider";
@@ -69,9 +70,10 @@ export async function createBrowserRuntime(): Promise<Runtime> {
   document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && void metadataSync.flush());
 
   const { settings } = services;
-  const [theme, autoAdvance] = await Promise.all([
+  const [theme, autoAdvance, layout] = await Promise.all([
     settings.get<string>(THEME_SETTINGS_KEY),
     settings.get<string>(AUTO_ADVANCE_SETTINGS_KEY),
+    settings.get<unknown>(LAYOUT_SETTINGS_KEY),
   ]);
   await Promise.all([
     runtime.keybindings.load(),
@@ -79,6 +81,7 @@ export async function createBrowserRuntime(): Promise<Runtime> {
     syncProfiles(runtime),
     theme ? runtime.dispatch("app.theme.set", { theme }) : null,
     autoAdvance ? runtime.dispatch("app.autoAdvance.set", { mode: autoAdvance }) : null,
+    layout && typeof layout === "object" ? runtime.dispatch("view.layout.restore", { layout }) : null,
   ]);
 
   // Restores view and photo from the URL once the folder loads, then keeps the URL current.

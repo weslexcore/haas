@@ -3,6 +3,7 @@ import { ActionRegistry } from "../core/actions/registry";
 import { appActions } from "./app";
 import { developActions } from "./develop";
 import { historyActions } from "./history";
+import { layoutActions } from "./layout";
 import { libraryActions } from "./library";
 import { navigationActions } from "./navigation";
 import { profileActions } from "./profiles";
@@ -15,6 +16,7 @@ export const allActions: readonly AnyAction[] = [
   ...appActions,
   ...shortcutActions,
   ...viewActions,
+  ...layoutActions,
   ...navigationActions,
   ...libraryActions,
   ...trashActions,

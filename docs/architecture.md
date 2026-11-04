@@ -118,6 +118,10 @@ palette "?" ─► app.ai.ask ─► AIProvider (Anthropic, from the browser wit
 
 `ui/url-state.ts` keeps `?folder=…&view=…&photo=…` in sync with the store. View changes push a history entry (Back returns to the previous view); photo changes replace it. On load and on back/forward, the target is applied through `library.selection.set` and `view.set` once the matching folder has loaded. A link for a different folder is dropped, and the URL is rewritten to match what is shown. A folder that needs permission keeps the target until it is reconnected.
 
+## Layout
+
+`state.layout` (`core/state/layout.ts`) holds where the Develop panel sits (docked left or right, or floating with a position and size) and how wide it and the filmstrip are. It changes only through the `view.panel.*` and `view.filmstrip.resize` actions (`actions/layout.ts`), which clamp values and save the whole slice to local settings; `view.layout.restore` applies it at startup. None of it is undoable. In the UI, `ui/layout/ResizeHandle` is a keyboard-accessible `separator` driven by the pointer-capture `useDrag` hook, and `ui/layout/DockablePanel` wraps the Develop panel: dragging its header past a few pixels undocks it (`view.panel.undock` at the pointer), later moves are `view.panel.float.set`, and releasing within 32px of a window edge docks it there (`view.panel.dock`). Floating position is clamped to the viewport in CSS, so a smaller window never hides the header.
+
 ## Theming
 
 `ui/styles/tokens.css` defines semantic tokens (`--surface-panel`, `--accent`, `--text-muted`, …) with one block per theme, selected by `data-theme` on `<html>`. Components use CSS Modules and only reference tokens. A new theme is a new block, and runtime themes can set the variables directly.

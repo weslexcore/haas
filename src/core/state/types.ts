@@ -1,6 +1,7 @@
 import type { Profile } from "../develop/profiles";
 import type { EditRecipe, SettingsGroup } from "../develop/recipe";
 import type { AiTurn } from "../ai/thread";
+import { initialLayout, type LayoutState } from "./layout";
 
 export type ViewMode = "grid" | "loupe" | "develop";
 export type ThemePreference = "light" | "dark" | "system";
@@ -113,6 +114,8 @@ export interface AppState {
   zoom: "fit" | "actual";
   infoOverlay: boolean;
   filmstrip: boolean;
+  /** Panel and filmstrip placement and sizes. */
+  layout: LayoutState;
   autoAdvance: AutoAdvanceMode;
   palette: PaletteState;
   contextMenu: ContextMenuState | null;
@@ -155,6 +158,7 @@ export const initialState: AppState = {
   zoom: "fit",
   infoOverlay: false,
   filmstrip: true,
+  layout: initialLayout,
   autoAdvance: "capsLock",
   palette: { open: false, actionId: null },
   contextMenu: null,
