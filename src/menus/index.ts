@@ -34,6 +34,7 @@ export const allMenus: readonly MenuDefinition[] = [
       item("view.set", { view: "develop" }, "Open in Develop"),
       separator,
       item("library.selection.all"),
+      item("library.pairs.toggle"),
       separator,
       item("library.rejected.remove"),
     ],

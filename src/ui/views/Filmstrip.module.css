@@ -31,10 +31,12 @@
   color: var(--text-primary);
 }
 
+/* Centered, like the show button on the collapsed bar, so the toggle stays put. */
 .hide {
   position: absolute;
   top: 4px;
-  right: 6px;
+  left: 50%;
+  transform: translateX(-50%);
   opacity: 0.7;
 }
 

@@ -74,7 +74,7 @@ Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, PEF and [more](src/cor
 
 - **Grid and Loupe** show the camera's embedded JPEG preview, which is fast. Loupe uses it when it is at least 1600px; otherwise the sensor data is decoded. So 100% zoom on a RAW shows the embedded preview's resolution.
 - **Develop and Export** demosaic the sensor data: AHD, camera white balance, sRGB, rotated upright. Develop decodes at half size when that still covers the screen.
-- **RAW+JPEG pairs** with the same name are one photo, as in Lightroom: the RAW is shown (marked "+JPG" in the info overlay) and the JPEG moves with it to and from `_Rejected/`.
+- **RAW+JPEG pairs** with the same name are one photo, as in Lightroom: the RAW is listed (with a "RAW+JPG" chip on its card and "+JPG" in the info overlay), thumbnails and Loupe show the camera's JPEG, Develop and export work from the RAW, and the JPEG moves with it to and from `_Rejected/`. The **RAW+JPG** button in the filter bar (or `Shift+J`) splits them into separate photos that are rated and removed on their own, and groups them again; the choice is remembered.
 
 LibRaw's WebAssembly uses threads, so the page must be **cross-origin isolated**: served over HTTPS (or on localhost) with these headers on **every** response, including `304 Not Modified` and static files (a `vite.config.ts` plugin does this for the dev and preview servers):
 

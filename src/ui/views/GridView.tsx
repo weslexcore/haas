@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
-import { selectVisibleIds } from "../../core/state/selectors";
+import { companionOf, selectVisibleIds } from "../../core/state/selectors";
 import type { PhotoRecord } from "../../core/state/types";
 import { useAppState } from "../hooks";
 import { FilterBar } from "./FilterBar";
@@ -113,6 +113,7 @@ interface CellProps {
 }
 
 const GridCell = memo(function GridCell({ photo, position, count, selected, active, onSelect, onMenu, onOpen }: CellProps) {
+  const paired = useAppState((s) => !!companionOf(s, photo.id));
   return (
     <div role="listitem" aria-setsize={count} aria-posinset={position}>
       <button
@@ -127,6 +128,11 @@ const GridCell = memo(function GridCell({ photo, position, count, selected, acti
         onContextMenu={(e) => onMenu(e, photo.id)}
       >
         <span className={styles.index}>{position}</span>
+        {paired && (
+          <span className={styles.pair} title="A RAW+JPEG pair, shown as one photo">
+            RAW+JPG
+          </span>
+        )}
         <Thumb photo={photo} className={styles.thumb} />
         <span className={styles.meta}>
           <Stars rating={photo.rating} />

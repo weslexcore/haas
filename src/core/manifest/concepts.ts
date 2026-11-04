@@ -65,8 +65,9 @@ export const CONCEPTS: Concept[] = [
     term: "RAW files",
     explanation:
       "Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 and others; mimeType image/x-…) are photos like " +
-      "any other: rated, edited and exported the same way. A RAW and a JPEG with the same name are one photo " +
-      "(the RAW, with companion set to the JPEG's path); the JPEG moves with it when it is removed.",
+      "any other: rated, edited and exported the same way. While RAW+JPEG grouping is on (the default; see " +
+      "library.pairs.set), a RAW and a JPEG with the same name are one photo: the RAW is listed and the JPEG " +
+      "is hidden and moves with it when it is removed. When it is off, they are two separate photos.",
   },
   {
     term: "Seeing photos",

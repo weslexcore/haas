@@ -3,7 +3,7 @@ import { defineAction } from "../core/actions/types";
 import { hasPhotos, hasSelection, needsPermission } from "../core/actions/when";
 import { INDEX_APPLY_ACTION } from "../core/library/indexer";
 import { loadSource } from "../core/library/load";
-import { matchesFilter, selectVisibleIds } from "../core/state/selectors";
+import { matchesFilter, selectLibraryIds, selectPairs, selectVisibleIds } from "../core/state/selectors";
 import { defaultFilter } from "../core/state/types";
 import { maybeAdvance, publicPhoto, targetIds } from "./context";
 
@@ -530,6 +530,61 @@ export const setSort = defineAction({
   },
 });
 
+// ── RAW+JPEG pairs ───────────────────────────────────────────────────────
+
+export const PAIRS_SETTINGS_KEY = "library.groupRawJpeg";
+
+export const setPairing = defineAction({
+  id: "library.pairs.set",
+  title: "Set RAW+JPEG Grouping",
+  description:
+    "Choose how a RAW and a JPEG with the same name are treated. Grouped (the default, as in Lightroom): they " +
+    "are one photo; the RAW is listed, marked +JPG, and the JPEG moves with it when it is removed. Separate: " +
+    "they are two photos, rated and removed independently. The choice is remembered.",
+  category: "Library",
+  kind: "command",
+  params: z.object({ grouped: z.boolean().describe("true to group each pair as one photo; false to list the RAW and the JPEG separately.") }),
+  examples: [
+    { params: { grouped: false }, description: "List RAW and JPEG files separately." },
+    { params: { grouped: true }, description: "Treat each RAW+JPEG pair as one photo." },
+  ],
+  label: ({ grouped }) => (grouped ? "Group RAW+JPEG Pairs" : "Separate RAW and JPEG"),
+  async run({ grouped }, ctx) {
+    if (grouped !== ctx.state.library.groupRawJpeg) {
+      ctx.update((s) => {
+        s.library.groupRawJpeg = grouped;
+      });
+      // Grouping hides JPEGs: a selected one stands for its RAW from now on.
+      const { rawByJpeg } = selectPairs(ctx.state);
+      const listed = new Set(selectLibraryIds(ctx.state));
+      const stand = (id: string) => (listed.has(id) ? id : rawByJpeg.get(id));
+      const ids = [...new Set(ctx.state.selection.ids.map(stand).filter((id): id is string => !!id && listed.has(id)))];
+      const active = ctx.state.selection.activeId ? stand(ctx.state.selection.activeId) : undefined;
+      const first = selectVisibleIds(ctx.state)[0] ?? null;
+      ctx.update((s) => {
+        const activeId = active && listed.has(active) ? active : (ids[0] ?? first);
+        s.selection = { activeId, ids: ids.length ? ids : activeId ? [activeId] : [] };
+      });
+    }
+    await ctx.services.settings.set(PAIRS_SETTINGS_KEY, grouped);
+  },
+});
+
+export const togglePairing = defineAction({
+  id: "library.pairs.toggle",
+  title: "Toggle RAW+JPEG Grouping",
+  description:
+    "Switch between showing each RAW+JPEG pair as one photo (the JPEG hidden, removed with the RAW) and as " +
+    "two separate photos.",
+  category: "Library",
+  kind: "command",
+  defaultShortcuts: [{ keys: "shift+j" }],
+  async run(_, ctx) {
+    const result = await ctx.dispatch(setPairing.id, { grouped: !ctx.state.library.groupRawJpeg });
+    if (!result.ok) throw new Error(result.message);
+  },
+});
+
 export const libraryActions = [
   openFolder,
   reconnectFolder,
@@ -550,4 +605,6 @@ export const libraryActions = [
   setFilter,
   clearFilter,
   setSort,
+  setPairing,
+  togglePairing,
 ];

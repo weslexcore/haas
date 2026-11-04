@@ -1,4 +1,4 @@
-import { EXPORTS_DIR, TRASH_DIR, imageMimeType, pairRawWithJpeg, sidecarCandidates, trashPath, uniqueName } from "../core/library/formats";
+import { EXPORTS_DIR, TRASH_DIR, imageMimeType, rawSiblingOf, sidecarCandidates, trashPath, uniqueName } from "../core/library/formats";
 import type { FileOpResult, PhotoSource, SourceFile } from "../core/services";
 import type { FolderInfo } from "../core/state/types";
 
@@ -26,27 +26,19 @@ export class MemorySource implements PhotoSource {
   }
 
   private list(include: (path: string) => boolean, rename: (path: string) => string = (p) => p): SourceFile[] {
-    const { photos, companions } = pairRawWithJpeg([...this.files.keys()].filter((path) => imageMimeType(path) && include(path)));
-    return photos
-      .map((full) => {
+    return [...this.files.keys()]
+      .filter((path) => imageMimeType(path) && include(path))
+      .map((full): SourceFile => {
         const f = this.files.get(full)!;
-        const file: SourceFile = {
+        return {
           path: rename(full),
           name: full.slice(full.lastIndexOf("/") + 1),
           size: f.data.size,
           lastModified: f.lastModified,
           mimeType: imageMimeType(full)!,
         };
-        const companion = companions.get(full);
-        if (companion) file.companion = rename(companion);
-        return file;
       })
       .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
-  }
-
-  /** The JPEG of a RAW+JPEG pair. */
-  private companionOf(photoPath: string): string | undefined {
-    return pairRawWithJpeg([...this.files.keys()].filter((p) => imageMimeType(p))).companions.get(photoPath);
   }
 
   async getFile(path: string): Promise<File> {
@@ -55,8 +47,13 @@ export class MemorySource implements PhotoSource {
     return new File([f.data], path.slice(path.lastIndexOf("/") + 1), { lastModified: f.lastModified });
   }
 
+  /** Sidecar paths for a photo; the JPEG of a RAW+JPEG pair gets its own. */
+  private sidecarPaths(photoPath: string, has: (path: string) => boolean = (p) => this.files.has(p)): string[] {
+    return sidecarCandidates(photoPath, { pairedJpeg: !!rawSiblingOf(photoPath, has) });
+  }
+
   private sidecarPath(photoPath: string): string | undefined {
-    return sidecarCandidates(photoPath).find((p) => this.files.has(p));
+    return this.sidecarPaths(photoPath).find((p) => this.files.has(p));
   }
 
   async readSidecar(photoPath: string) {
@@ -68,7 +65,7 @@ export class MemorySource implements PhotoSource {
 
   async writeSidecar(photoPath: string, text: string): Promise<void> {
     if (!this.folder.writable) throw new Error("Read-only folder.");
-    const path = this.sidecarPath(photoPath) ?? sidecarCandidates(photoPath)[0]!;
+    const path = this.sidecarPath(photoPath) ?? this.sidecarPaths(photoPath)[0]!;
     this.files.set(path, { data: new Blob([text]), lastModified: Date.now() });
     this.writes++;
   }
@@ -86,10 +83,8 @@ export class MemorySource implements PhotoSource {
       try {
         if (!this.files.has(path)) throw new Error("Not in this folder");
         const sidecar = this.sidecarPath(path);
-        const companion = this.companionOf(path);
         this.move(path, trashPath(path));
         if (sidecar) this.move(sidecar, trashPath(sidecar));
-        if (companion) this.move(companion, trashPath(companion));
         result.done.push(path);
       } catch (e) {
         result.failed.push({ path, error: e instanceof Error ? e.message : String(e) });
@@ -106,8 +101,8 @@ export class MemorySource implements PhotoSource {
       if (photoPaths && !photoPaths.includes(file.path)) continue;
       try {
         this.move(trashPath(file.path), file.path);
-        for (const c of sidecarCandidates(file.path)) if (this.files.has(trashPath(c))) this.move(trashPath(c), c);
-        if (file.companion) this.move(trashPath(file.companion), file.companion);
+        const candidates = this.sidecarPaths(file.path, (p) => this.files.has(p) || this.files.has(trashPath(p)));
+        for (const c of candidates) if (this.files.has(trashPath(c)) && !this.files.has(c)) this.move(trashPath(c), c);
         result.done.push(file);
       } catch (e) {
         result.failed.push({ path: file.path, error: e instanceof Error ? e.message : String(e) });

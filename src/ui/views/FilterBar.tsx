@@ -1,6 +1,6 @@
 import type { ColorLabel, Flag, SortKey } from "../../core/state/types";
-import { isFilterActive, selectVisibleIds } from "../../core/state/selectors";
-import { useAppState, useDispatch } from "../hooks";
+import { isFilterActive, selectLibraryIds, selectPairs, selectVisibleIds } from "../../core/state/selectors";
+import { useAppState, useDispatch, useShortcut } from "../hooks";
 import { ActionButton } from "../shell/ActionButton";
 import styles from "./FilterBar.module.css";
 
@@ -24,7 +24,7 @@ export function FilterBar() {
   const filter = useAppState((s) => s.library.filter);
   const sort = useAppState((s) => s.library.sort);
   const shown = useAppState((s) => selectVisibleIds(s).length);
-  const total = useAppState((s) => s.photos.order.length);
+  const total = useAppState((s) => selectLibraryIds(s).length);
   const removed = useAppState((s) => s.library.removedCount);
   const dispatch = useDispatch();
   const setFilter = (params: object) => void dispatch("library.filter.set", params);
@@ -87,6 +87,8 @@ export function FilterBar() {
         onChange={(e) => setFilter({ text: e.target.value })}
       />
 
+      <PairsToggle />
+
       <span className={styles.spacer} />
 
       <label className={styles.sort}>
@@ -121,6 +123,28 @@ export function FilterBar() {
       )}
       {removed > 0 && <RemovedPhotos count={removed} />}
     </div>
+  );
+}
+
+/** Shown when the folder has RAW+JPEG pairs: one photo per pair (pressed), or the RAW and the JPEG separately. */
+function PairsToggle() {
+  const pairs = useAppState((s) => selectPairs(s).jpegByRaw.size);
+  const grouped = useAppState((s) => s.library.groupRawJpeg);
+  const shortcut = useShortcut("library.pairs.toggle");
+  const dispatch = useDispatch();
+  if (!pairs) return null;
+  const label = grouped ? "RAW+JPEG pairs are grouped as one photo; click to list them separately" : "RAW and JPEG files are listed separately; click to group each pair as one photo";
+  return (
+    <button
+      type="button"
+      className={styles.toggle}
+      aria-pressed={grouped}
+      aria-label="Group RAW+JPEG pairs"
+      title={shortcut ? `${label} (${shortcut.strokes.join(" ")})` : label}
+      onClick={() => void dispatch("library.pairs.toggle")}
+    >
+      RAW+JPG
+    </button>
   );
 }
 

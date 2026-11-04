@@ -56,10 +56,10 @@ const shotKey = (path: string) => {
 };
 
 /**
- * RAW+JPEG pairs (as cameras write them) are one photo, as in Lightroom: the
- * RAW is listed and the JPEG travels with it like a sidecar (moved to and
- * from _Rejected together). Returns the paths to list, and each listed RAW's
- * companion.
+ * RAW+JPEG pairs (as cameras write them): a RAW and a JPEG with the same name.
+ * Returns the paths that are photos of their own (every RAW, and JPEGs without
+ * a RAW), and each paired RAW's JPEG. Whether a pair is shown as one photo is
+ * a library setting (see selectPairs in core/state/selectors.ts).
  */
 export function pairRawWithJpeg(paths: string[]): { photos: string[]; companions: Map<string, string> } {
   const raws = new Map<string, string>();
@@ -99,14 +99,30 @@ export function baseName(path: string): string {
 export const trashPath = (path: string) => `${TRASH_DIR}/${path}`;
 
 /**
+ * The RAW that a JPEG shares its name with (a RAW+JPEG pair), if `has` finds
+ * one. Undefined for RAW files and for JPEGs without a RAW.
+ */
+export function rawSiblingOf(path: string, has: (path: string) => boolean): string | undefined {
+  if (isRawPath(path) || !IMAGE_TYPES[extension(path)]) return undefined;
+  const dot = path.lastIndexOf(".");
+  const base = dot > path.lastIndexOf("/") ? path.slice(0, dot) : path;
+  for (const ext of Object.keys(RAW_TYPES)) {
+    for (const candidate of [`${base}.${ext}`, `${base}.${ext.toUpperCase()}`]) if (has(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/**
  * Possible sidecar paths for a photo, in preference order for new files:
  * "DSC_0001.xmp" (Adobe), then "DSC_0001.jpg.xmp" (darktable).
- * An existing sidecar of either form is used.
+ * An existing sidecar of either form is used. The JPEG of a RAW+JPEG pair
+ * (`pairedJpeg`) leaves "DSC_0001.xmp" to its RAW and uses only the second
+ * form, so the two keep separate ratings when they are separate photos.
  */
-export function sidecarCandidates(photoPath: string): string[] {
+export function sidecarCandidates(photoPath: string, opts: { pairedJpeg?: boolean } = {}): string[] {
   const dot = photoPath.lastIndexOf(".");
   const base = dot > photoPath.lastIndexOf("/") ? photoPath.slice(0, dot) : photoPath;
-  return [`${base}.xmp`, `${photoPath}.xmp`];
+  return opts.pairedJpeg ? [`${photoPath}.xmp`] : [`${base}.xmp`, `${photoPath}.xmp`];
 }
 
 export function splitPath(path: string): { dir: string[]; name: string } {

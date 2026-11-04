@@ -35,8 +35,6 @@ export interface PhotoRecord {
   /** File modified time, ms since epoch. */
   lastModified?: number;
   mimeType?: string;
-  /** RAW+JPEG pair: the JPEG's path (shown as "+JPG"; moves with the RAW). */
-  companion?: string;
   width?: number;
   height?: number;
   exif?: ExifSummary;
@@ -145,9 +143,17 @@ export interface AppState {
     sort: LibrarySort;
     /** Photos moved to the folder's _Rejected subfolder (restorable until it is emptied). */
     removedCount: number;
+    /**
+     * A RAW and a JPEG with the same name are one photo (the RAW; the JPEG is hidden and
+     * moves with it), as in Lightroom. Off: they are two photos. Persisted.
+     */
+    groupRawJpeg: boolean;
   };
   photos: {
-    /** Load order (by path). Display order comes from selectVisibleIds(). */
+    /**
+     * Every image file, in load order (by path). Grouped RAW+JPEG pairs keep their JPEG here
+     * too: selectLibraryIds() leaves it out, and selectVisibleIds() also filters and sorts.
+     */
     order: string[];
     byId: Record<string, PhotoRecord>;
   };
@@ -175,7 +181,7 @@ export const initialState: AppState = {
   shortcutsOpen: false,
   develop: { clipboard: null, cropTool: false, levelTool: false, profiles: [] },
   ai: { previewing: false, settingsOpen: false, panelOpen: false, thread: [] },
-  library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0 },
+  library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0, groupRawJpeg: true },
   photos: { order: [], byId: {} },
   selection: { activeId: null, ids: [] },
 };

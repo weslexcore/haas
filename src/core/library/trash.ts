@@ -1,7 +1,7 @@
 import type { AppContext } from "../actions/types";
 import type { HistoryEffect } from "../history/history";
 import type { PhotoSource } from "../services";
-import { selectVisibleIds } from "../state/selectors";
+import { companionOf, selectLibraryIds, selectVisibleIds } from "../state/selectors";
 import { indexPhotos } from "./indexer";
 import { buildRecords } from "./load";
 
@@ -44,9 +44,10 @@ function moveEffect(ctx: AppContext, source: PhotoSource, paths: string[], direc
 }
 
 /**
- * Move photos (with sidecars) into the folder's _Rejected subfolder and drop
- * them from the library. Undoable (the files move back), and restorable until
- * the trash is emptied. Must run inside an undoable command.
+ * Move photos (with sidecars, and the JPEG of a grouped RAW+JPEG pair) into
+ * the folder's _Rejected subfolder and drop them from the library. Undoable
+ * (the files move back), and restorable until the trash is emptied. Must run
+ * inside an undoable command.
  */
 export async function removePhotos(ctx: AppContext, ids: string[]) {
   const source = currentSource(ctx);
@@ -55,7 +56,11 @@ export async function removePhotos(ctx: AppContext, ids: string[]) {
   await ctx.services.persistence.flush();
 
   const visibleBefore = selectVisibleIds(ctx.state);
-  const { done, failed } = await source.moveToTrash(ids);
+  const paths = ids.flatMap((id) => {
+    const jpeg = companionOf(ctx.state, id);
+    return jpeg && ctx.state.photos.byId[jpeg] ? [id, jpeg] : [id];
+  });
+  const { done, failed } = await source.moveToTrash(paths);
   const gone = new Set(done);
   if (done.length) ctx.recordEffect(moveEffect(ctx, source, done, "toTrash"));
   ctx.update((s) => {
@@ -71,7 +76,7 @@ export async function removePhotos(ctx: AppContext, ids: string[]) {
     }
     s.selection = { activeId: active, ids: ids.length ? ids : active ? [active] : [] };
   });
-  return { removed: done.length, failed };
+  return { removed: ids.filter((id) => gone.has(id)).length, failed };
 }
 
 /** Move photos back from the _Rejected subfolder (all of them if no paths are given). Undoable. */
@@ -84,8 +89,15 @@ export async function restorePhotos(ctx: AppContext, paths?: string[]) {
     for (const r of records) s.photos.byId[r.id] = r;
     s.photos.order = [...new Set([...s.photos.order, ...records.map((r) => r.id)])].sort(numeric);
     s.library.removedCount = Math.max(0, s.library.removedCount - records.length);
-    if (records.length) s.selection = { activeId: records[0]!.id, ids: records.map((r) => r.id) };
   });
+  // Select what came back, except a JPEG hidden inside a grouped pair.
+  const listed = new Set(selectLibraryIds(ctx.state));
+  const restored = records.map((r) => r.id).filter((id) => listed.has(id));
+  if (restored.length) {
+    ctx.update((s) => {
+      s.selection = { activeId: restored[0]!, ids: restored };
+    });
+  }
   const unindexed = records.filter((r) => !r.indexed).map((r) => r.id);
   if (unindexed.length) void indexPhotos(ctx, source.folder.id, unindexed);
   return { restored: records.length, failed };

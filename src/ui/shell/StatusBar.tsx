@@ -1,5 +1,5 @@
 import { useStore } from "zustand";
-import { selectVisibleIds } from "../../core/state/selectors";
+import { selectLibraryIds, selectVisibleIds } from "../../core/state/selectors";
 import { useAppState, useHistory, usePendingChord, useShortcut } from "../hooks";
 import { inputStore } from "../input-store";
 import { useRuntime } from "../runtime-context";
@@ -9,7 +9,7 @@ import styles from "./StatusBar.module.css";
 
 export function StatusBar() {
   const { keybindings } = useRuntime();
-  const count = useAppState((s) => s.photos.order.length);
+  const count = useAppState((s) => selectLibraryIds(s).length);
   const shown = useAppState((s) => selectVisibleIds(s).length);
   const selected = useAppState((s) => s.selection.ids.length);
   const status = useAppState((s) => s.library.status);

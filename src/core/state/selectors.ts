@@ -1,4 +1,55 @@
+import { pairRawWithJpeg } from "../library/formats";
 import type { AppState, LibraryFilter, LibrarySort, PhotoRecord } from "./types";
+
+export interface RawJpegPairs {
+  /** Each paired RAW's JPEG. */
+  jpegByRaw: Map<string, string>;
+  /** Each paired JPEG's RAW. */
+  rawByJpeg: Map<string, string>;
+}
+
+let pairsCache: { order: string[]; result: RawJpegPairs } | null = null;
+
+/** RAW+JPEG pairs among the loaded files (by path, so only the load order matters). */
+export function selectPairs(state: AppState): RawJpegPairs {
+  const { order } = state.photos;
+  if (pairsCache && pairsCache.order === order) return pairsCache.result;
+  const { companions } = pairRawWithJpeg(order);
+  const result: RawJpegPairs = { jpegByRaw: companions, rawByJpeg: new Map([...companions].map(([raw, jpeg]) => [jpeg, raw])) };
+  pairsCache = { order, result };
+  return result;
+}
+
+let libraryCache: { order: string[]; grouped: boolean; result: string[] } | null = null;
+
+/**
+ * The photos the library holds, in load order: every file, minus the JPEG of
+ * each RAW+JPEG pair while pairs are grouped.
+ */
+export function selectLibraryIds(state: AppState): string[] {
+  const { order } = state.photos;
+  const grouped = state.library.groupRawJpeg;
+  if (libraryCache && libraryCache.order === order && libraryCache.grouped === grouped) return libraryCache.result;
+  const { rawByJpeg } = selectPairs(state);
+  const result = grouped && rawByJpeg.size ? order.filter((id) => !rawByJpeg.has(id)) : order;
+  libraryCache = { order, grouped, result };
+  return result;
+}
+
+/** The JPEG that travels with this RAW while pairs are grouped (shown as "+JPG"; removed with it). */
+export function companionOf(state: AppState, id: string): string | undefined {
+  return state.library.groupRawJpeg ? selectPairs(state).jpegByRaw.get(id) : undefined;
+}
+
+/**
+ * The file shown for a photo in thumbnails and Loupe: a grouped RAW shows its
+ * camera JPEG (full size, as the camera rendered it) instead of the RAW's
+ * embedded preview. Develop and export still work from the RAW.
+ */
+export function displayedRecord(state: AppState, photo: PhotoRecord): PhotoRecord {
+  const jpeg = companionOf(state, photo.id);
+  return (jpeg && state.photos.byId[jpeg]) || photo;
+}
 
 export function matchesFilter(p: PhotoRecord, f: LibraryFilter): boolean {
   if (p.rating < f.minRating) return false;
@@ -34,7 +85,7 @@ function compare(a: PhotoRecord, b: PhotoRecord, sort: LibrarySort): number {
 }
 
 let cache: {
-  order: string[];
+  ids: string[];
   byId: Record<string, PhotoRecord>;
   filter: LibraryFilter;
   sort: LibrarySort;
@@ -46,17 +97,18 @@ let cache: {
  * (structurally shared) inputs, so it is cheap to call from actions and UI.
  */
 export function selectVisibleIds(state: AppState): string[] {
-  const { order, byId } = state.photos;
+  const ids = selectLibraryIds(state);
+  const { byId } = state.photos;
   const { filter, sort } = state.library;
-  if (cache && cache.order === order && cache.byId === byId && cache.filter === filter && cache.sort === sort) {
+  if (cache && cache.ids === ids && cache.byId === byId && cache.filter === filter && cache.sort === sort) {
     return cache.result;
   }
-  const result = order
+  const result = ids
     .map((id) => byId[id]!)
     .filter((p) => matchesFilter(p, filter))
     .sort((a, b) => compare(a, b, sort))
     .map((p) => p.id);
-  cache = { order, byId, filter, sort, result };
+  cache = { ids, byId, filter, sort, result };
   return result;
 }
 

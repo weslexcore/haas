@@ -57,9 +57,9 @@ async function seedRaw(page: Page) {
       width: 600, height: 400, pixel: scene(600, 400), orientation: 6, date: "2026:09:14 09:33:00",
       preview: { jpeg: withExifOrientation(Uint8Array.from(preview), 6), width: 1800, height: 1200 },
     }),
-    // A RAW+JPEG pair: one photo.
+    // A RAW+JPEG pair: one photo, shown from the camera's JPEG (green; the DNG has no preview and decodes red/blue).
     "PAIR_0003.dng": buildDng({ width: 600, height: 400, pixel: scene(600, 400), date: "2026:09:14 09:32:00" }),
-    "PAIR_0003.JPG": "not decoded: travels with the RAW",
+    "PAIR_0003.JPG": Uint8Array.from(preview),
   };
   const encoded = Object.fromEntries(
     Object.entries(files).map(([k, v]) => [k, typeof v === "string" ? btoa(v) : Buffer.from(v).toString("base64")]),
@@ -179,11 +179,57 @@ test("RAW+JPEG pairs are one photo: the JPEG moves with the RAW", async ({ page 
   await page.keyboard.press("x");
   await page.evaluate(() => window.photo!.dispatch("library.rejected.remove"));
   await expect.poll(() => exists(page, "_Rejected/PAIR_0003.JPG")).toBe(true);
-  expect(await exists(page, "_Rejected/PAIR_0003.dng")).toBe(true);
+  await expect.poll(() => exists(page, "_Rejected/PAIR_0003.dng")).toBe(true);
   expect(await exists(page, "PAIR_0003.JPG")).toBe(false);
 
   await page.keyboard.press("ControlOrMeta+z"); // undo: both come back
   await expect.poll(() => exists(page, "PAIR_0003.JPG")).toBe(true);
-  expect(await exists(page, "PAIR_0003.dng")).toBe(true);
+  await expect.poll(() => exists(page, "PAIR_0003.dng")).toBe(true);
   await expect(status(page)).toContainText("4 photos");
+});
+
+test("a grouped pair is shown from its JPEG; separated, the RAW shows its own decode", async ({ page }) => {
+  const natural = (img: Locator) => img.evaluate(async (el: HTMLImageElement) => (await el.decode(), [el.naturalWidth, el.naturalHeight]));
+  const thumb = cell(page, "PAIR_0003.dng").locator("img");
+  await expect(thumb).toBeVisible();
+  expect((await natural(thumb))[0]! / (await natural(thumb))[1]!).toBeCloseTo(1.5, 1);
+
+  await cell(page, "PAIR_0003.dng").dblclick();
+  const img = page.getByRole("img", { name: "PAIR_0003.dng" });
+  await expect(img).toBeVisible();
+  expect(await natural(img)).toEqual([1800, 1200]); // the JPEG
+
+  await page.keyboard.press("Shift+J");
+  await expect.poll(() => natural(img)).toEqual([300, 200]); // the DNG, decoded at half size
+  await page.keyboard.press("Shift+J");
+  await expect.poll(() => natural(img)).toEqual([1800, 1200]);
+});
+
+test("RAW+JPEG grouping can be switched off: the pair becomes two photos, removed separately", async ({ page }) => {
+  const toggle = page.getByRole("button", { name: "Group RAW+JPEG pairs" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const chip = cell(page, "PAIR_0003.dng").getByText("RAW+JPG");
+  await expect(chip).toBeVisible();
+  await expect(cell(page, "RAW_0001.dng").getByText("RAW+JPG")).toHaveCount(0);
+  await page.keyboard.press("Shift+J");
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(grid(page).getByRole("listitem")).toHaveCount(5);
+  await expect(cell(page, "PAIR_0003.JPG")).toBeVisible();
+  await expect(chip).toHaveCount(0);
+
+  await cell(page, "PAIR_0003.dng").click();
+  await page.keyboard.press("x");
+  await page.evaluate(() => window.photo!.dispatch("library.rejected.remove"));
+  await expect.poll(() => exists(page, "_Rejected/PAIR_0003.dng")).toBe(true);
+  expect(await exists(page, "PAIR_0003.JPG")).toBe(true); // the JPEG stays
+  await expect(cell(page, "PAIR_0003.JPG")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(() => exists(page, "PAIR_0003.dng")).toBe(true);
+
+  // The choice survives a reload; the button groups them again.
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(grid(page).getByRole("listitem")).toHaveCount(4); // PAIR_0003.JPG is a photo of its own now
 });
