@@ -1,13 +1,19 @@
-import { fileKey } from "../../core/library/util";
+import { isRawMimeType } from "../../core/library/formats";
+import { fileKey, localIso } from "../../core/library/util";
 import type { LibraryProvider, PhotoIndexData, PreviewService } from "../../core/services";
 import type { PhotoRecord } from "../../core/state/types";
 import type { PhotoDB } from "../db";
 import { WorkerPool } from "./worker-pool";
 import { sampleImage } from "../sample-image";
+import { RawDecoder } from "../raw/raw-decoder";
 
 const THUMB_SIZE = 480;
 const MAX_THUMB_URLS = 1200;
 const MAX_IMAGE_URLS = 5;
+/** RAW in Loupe: the camera's embedded preview when it is at least this big (long edge), else a full decode. */
+const RAW_LOUPE_MIN_PREVIEW = 1600;
+/** RAW decodes for at most this size (thumbnails, AI vision) use the embedded preview when it is big enough. */
+const RAW_SMALL_DECODE = 1024;
 
 /** Map with insertion-order LRU eviction that revokes evicted object URLs. */
 class UrlCache {
@@ -48,6 +54,9 @@ interface Inflight {
  * Thumbnails: memory URL cache → IndexedDB cache → worker decode.
  * Full images: object URLs of the original file (the browser decodes and
  * orients them). EXIF: worker, on the background lane.
+ *
+ * RAW files go through LibRaw: thumbnails and Loupe use the camera's embedded
+ * JPEG preview (fast); Develop and export demosaic the sensor data.
  */
 export class BrowserPreviewService implements PreviewService {
   private thumbs = new UrlCache(MAX_THUMB_URLS);
@@ -59,6 +68,7 @@ export class BrowserPreviewService implements PreviewService {
     private readonly library: LibraryProvider,
     private readonly db: PhotoDB,
     pool?: WorkerPool,
+    private readonly raw = new RawDecoder(),
   ) {
     this.pool =
       pool ?? new WorkerPool(() => new Worker(new URL("./preview.worker.ts", import.meta.url), { type: "module" }));
@@ -81,7 +91,9 @@ export class BrowserPreviewService implements PreviewService {
         let blob = row?.blob;
         if (!blob) {
           const file = await source.getFile(photo.id);
-          const result = await this.pool.run({ type: "thumbnail", file, maxSize: THUMB_SIZE }, { signal: controller.signal });
+          const result = isRawMimeType(photo.mimeType)
+            ? await this.rawImage(file, THUMB_SIZE, THUMB_SIZE * 0.66, controller.signal)
+            : await this.pool.run({ type: "thumbnail", file, maxSize: THUMB_SIZE }, { signal: controller.signal });
           if (!result) return null;
           blob = result.blob;
           void this.db.thumbs.put({ key, blob, width: result.width, height: result.height, at: Date.now() }).catch(() => undefined);
@@ -114,16 +126,67 @@ export class BrowserPreviewService implements PreviewService {
     const key = `${source.folder.id}|${photo.id}|${fileKey(photo)}`;
     const cached = this.images.get(key);
     if (cached) return cached;
-    const url = URL.createObjectURL(await source.getFile(photo.id));
+    const file = await source.getFile(photo.id);
+    let blob: Blob = file;
+    if (isRawMimeType(photo.mimeType)) {
+      const image = await this.rawImage(file, Number.MAX_SAFE_INTEGER, RAW_LOUPE_MIN_PREVIEW);
+      if (!image) return null;
+      blob = image.blob;
+    }
+    const url = URL.createObjectURL(blob);
     this.images.set(key, url);
     return url;
+  }
+
+  /**
+   * A RAW photo as an upright JPEG of at most `maxSize` (long edge): from the
+   * embedded preview when it is at least `minPreview` (and covers maxSize, or
+   * is the full photo), otherwise from a half-size decode.
+   */
+  private async rawImage(file: File, maxSize: number, minPreview: number, signal?: AbortSignal) {
+    const preview = await this.raw.preview(file).catch(() => null);
+    const edge = preview ? Math.max(preview.width, preview.height) : 0;
+    if (preview && edge >= minPreview) {
+      if (preview.orientation === 1 && edge <= maxSize) return { blob: preview.blob, width: preview.width, height: preview.height };
+      return this.pool.run(
+        { type: "thumbnail", file: preview.blob, maxSize: Math.min(maxSize, edge), orientation: preview.orientation, quality: 0.9 },
+        { signal },
+      );
+    }
+    signal?.throwIfAborted();
+    const pixels = await this.raw.decode(file, { half: true }).catch(() => null);
+    if (!pixels) return null;
+    const bitmap = await createImageBitmap(pixels);
+    return this.pool.run({ type: "thumbnail", file: bitmap, maxSize: Math.min(maxSize, Math.max(bitmap.width, bitmap.height)), quality: 0.9 }, { signal });
   }
 
   async readIndexData(photo: PhotoRecord): Promise<PhotoIndexData | null> {
     const source = this.library.current();
     if (!source || photo.placeholderHue !== undefined) return null;
     const file = await source.getFile(photo.id);
-    return this.pool.run({ type: "index", file, mimeType: photo.mimeType ?? file.type }, { lane: "background" });
+    const exif = this.pool.run({ type: "index", file, mimeType: photo.mimeType ?? file.type }, { lane: "background" });
+    if (!isRawMimeType(photo.mimeType)) return exif;
+    // RAW: EXIF tags where exifr can read them; the size always from LibRaw (EXIF sizes there often describe a preview).
+    const [tags, info] = await Promise.all([exif.catch((): PhotoIndexData => ({})), this.raw.info(file).catch(() => null)]);
+    if (!info) return tags;
+    const fromRaw: PhotoIndexData["exif"] = {
+      make: info.make,
+      model: info.model,
+      iso: info.iso,
+      exposureTime: info.exposureTime,
+      aperture: info.aperture,
+      focalLength: info.focalLength,
+    };
+    const exifMerged = Object.fromEntries(
+      Object.entries({ ...fromRaw, ...tags.exif }).filter(([, v]) => v !== undefined),
+    ) as NonNullable<PhotoIndexData["exif"]>;
+    return {
+      ...tags,
+      width: info.width,
+      height: info.height,
+      ...(Object.keys(exifMerged).length ? { exif: exifMerged } : {}),
+      ...(tags.capturedAt || !info.timestamp ? {} : { capturedAt: localIso(info.timestamp.getTime()) }),
+    };
   }
 
   async decode(photo: PhotoRecord, opts: { maxEdge?: number } = {}): Promise<ImageBitmap | null> {
@@ -133,13 +196,30 @@ export class BrowserPreviewService implements PreviewService {
     }
     const source = this.library.current();
     if (!source) return null;
+    const file = await source.getFile(photo.id);
+    if (isRawMimeType(photo.mimeType)) return this.decodeRaw(photo, file, opts.maxEdge);
     // Oriented according to EXIF ("from-image" is the default).
-    const full = await createImageBitmap(await source.getFile(photo.id));
+    const full = await createImageBitmap(file);
     return scaleBitmap(full, opts.maxEdge);
+  }
+
+  private async decodeRaw(photo: PhotoRecord, file: File, maxEdge?: number): Promise<ImageBitmap | null> {
+    // Small sizes (edited thumbnails, AI vision): the embedded preview, when it is big enough.
+    if (maxEdge && maxEdge <= RAW_SMALL_DECODE) {
+      const image = await this.rawImage(file, maxEdge, maxEdge).catch(() => null);
+      if (image) return createImageBitmap(image.blob);
+    }
+    // Half size is plenty when it still covers maxEdge.
+    const longEdge = Math.max(photo.width ?? 0, photo.height ?? 0);
+    const half = !!maxEdge && longEdge > 0 && longEdge / 2 >= maxEdge;
+    const pixels = await this.raw.decode(file, { half });
+    if (!pixels) return null;
+    return scaleBitmap(await createImageBitmap(pixels), maxEdge);
   }
 
   reset(): void {
     this.pool.clear();
+    this.raw.dispose();
     for (const entry of this.inflight.values()) entry.controller.abort();
     this.inflight.clear();
     this.thumbs.clear();

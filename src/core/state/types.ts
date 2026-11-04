@@ -33,6 +33,8 @@ export interface PhotoRecord {
   /** File modified time, ms since epoch. */
   lastModified?: number;
   mimeType?: string;
+  /** RAW+JPEG pair: the JPEG's path (shown as "+JPG"; moves with the RAW). */
+  companion?: string;
   width?: number;
   height?: number;
   exif?: ExifSummary;

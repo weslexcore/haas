@@ -62,6 +62,13 @@ export const CONCEPTS: Concept[] = [
       "darktable can read them. The contents of photos are never modified.",
   },
   {
+    term: "RAW files",
+    explanation:
+      "Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 and others; mimeType image/x-…) are photos like " +
+      "any other: rated, edited and exported the same way. A RAW and a JPEG with the same name are one photo " +
+      "(the RAW, with companion set to the JPEG's path); the JPEG moves with it when it is removed.",
+  },
+  {
     term: "Seeing photos",
     explanation:
       "Metadata (rating, flags, EXIF, capture time) comes from query actions. To judge what is in a photo " +

@@ -6,6 +6,7 @@ import {
   imageMimeType,
   isIgnoredDir,
   isSidecarPath,
+  pairRawWithJpeg,
   sidecarCandidates,
   splitPath,
   trashPath,
@@ -28,6 +29,8 @@ export class FsAccessSource implements PhotoSource {
   private photos = new Map<string, FileSystemFileHandle>();
   /** Sidecars by lower-cased path (file systems may be case-insensitive). */
   private sidecars = new Map<string, FileEntry>();
+  /** RAW+JPEG pairs: the JPEG by its RAW's path. */
+  private companions = new Map<string, FileEntry>();
 
   constructor(
     readonly folder: FolderInfo,
@@ -37,15 +40,17 @@ export class FsAccessSource implements PhotoSource {
   async listFiles(): Promise<SourceFile[]> {
     this.photos.clear();
     this.sidecars.clear();
-    const found: FileEntry[] = [];
+    this.companions.clear();
+    const images = new Map<string, FileEntry>();
     await this.walk(this.root, "", (entry) => {
       if (isSidecarPath(entry.path)) this.sidecars.set(entry.path.toLowerCase(), entry);
-      else if (imageMimeType(entry.path)) {
-        this.photos.set(entry.path, entry.handle);
-        found.push(entry);
-      }
+      else if (imageMimeType(entry.path)) images.set(entry.path, entry);
     });
-    return stat(found);
+    const { photos, companions } = pairRawWithJpeg([...images.keys()]);
+    for (const [raw, jpeg] of companions) this.companions.set(raw, images.get(jpeg)!);
+    const found = photos.map((path) => images.get(path)!);
+    for (const entry of found) this.photos.set(entry.path, entry.handle);
+    return stat(found, companions);
   }
 
   private async walk(
@@ -120,6 +125,11 @@ export class FsAccessSource implements PhotoSource {
           await this.move(sidecar.path, sidecar.handle, trashPath(sidecar.path));
           this.sidecars.delete(sidecar.path.toLowerCase());
         }
+        const companion = this.companions.get(path);
+        if (companion) {
+          await this.move(companion.path, companion.handle, trashPath(companion.path));
+          this.companions.delete(path);
+        }
         result.done.push(path);
       } catch (e) {
         result.failed.push({ path, error: message(e) });
@@ -145,7 +155,13 @@ export class FsAccessSource implements PhotoSource {
           await this.move(sidecar.path, sidecar.handle, candidate);
           this.sidecars.set(candidate.toLowerCase(), { path: candidate, handle: await this.fileAt(candidate) });
         }
-        result.done.push(...(await stat([{ path, handle }])));
+        const companion = trash.companions.get(path);
+        if (companion) {
+          const original = companion.path.slice(TRASH_DIR.length + 1);
+          await this.move(companion.path, companion.handle, original);
+          this.companions.set(path, { path: original, handle: await this.fileAt(original) });
+        }
+        result.done.push(...(await stat([{ path, handle }], new Map(companion ? [[path, companion.path.slice(TRASH_DIR.length + 1)]] : []))));
       } catch (e) {
         result.failed.push({ path, error: message(e) });
       }
@@ -174,23 +190,28 @@ export class FsAccessSource implements PhotoSource {
   private async trashEntries() {
     const photos = new Map<string, FileEntry>();
     const sidecars = new Map<string, FileEntry>();
+    const companions = new Map<string, FileEntry>();
     let trashDir: FileSystemDirectoryHandle;
     try {
       trashDir = await this.root.getDirectoryHandle(TRASH_DIR);
     } catch {
-      return { photos, sidecars };
+      return { photos, sidecars, companions };
     }
+    const images = new Map<string, FileEntry>();
     await this.walk(
       trashDir,
       "",
       (entry) => {
         const full = { path: trashPath(entry.path), handle: entry.handle };
         if (isSidecarPath(entry.path)) sidecars.set(entry.path.toLowerCase(), full);
-        else if (imageMimeType(entry.path)) photos.set(entry.path, full);
+        else if (imageMimeType(entry.path)) images.set(entry.path, full);
       },
       false,
     );
-    return { photos, sidecars };
+    const paired = pairRawWithJpeg([...images.keys()]);
+    for (const path of paired.photos) photos.set(path, images.get(path)!);
+    for (const [raw, jpeg] of paired.companions) companions.set(raw, images.get(jpeg)!);
+    return { photos, sidecars, companions };
   }
 
   async writeExport(fileName: string, data: Blob): Promise<string> {
@@ -257,7 +278,7 @@ export class FsAccessSource implements PhotoSource {
   }
 }
 
-async function stat(entries: FileEntry[]): Promise<SourceFile[]> {
+async function stat(entries: FileEntry[], companions?: Map<string, string>): Promise<SourceFile[]> {
   const out: SourceFile[] = new Array(entries.length);
   let next = 0;
   const worker = async () => {
@@ -266,6 +287,8 @@ async function stat(entries: FileEntry[]): Promise<SourceFile[]> {
       const { path, handle } = entries[i]!;
       const file = await handle.getFile();
       out[i] = { path, name: file.name, size: file.size, lastModified: file.lastModified, mimeType: imageMimeType(path)! };
+      const companion = companions?.get(path);
+      if (companion) out[i]!.companion = companion;
     }
   };
   await Promise.all(Array.from({ length: Math.min(STAT_CONCURRENCY, entries.length) }, worker));
