@@ -1,5 +1,5 @@
 import { INTERACTIVE_SOURCES, type AppContext, type ReadonlyContext } from "../core/actions/types";
-import { isFilterActive, selectVisibleIds } from "../core/state/selectors";
+import { isFilterActive, selectLibraryIds, selectVisibleIds } from "../core/state/selectors";
 import type { AppState, PhotoRecord } from "../core/state/types";
 
 export function contextSummary(ctx: ReadonlyContext) {
@@ -10,7 +10,7 @@ export function contextSummary(ctx: ReadonlyContext) {
     theme: state.theme,
     folder: state.library.folder,
     libraryStatus: state.library.status,
-    photoCount: state.photos.order.length,
+    photoCount: selectLibraryIds(state).length,
     visibleCount: selectVisibleIds(state).length,
     filter: isFilterActive(state.library.filter) ? state.library.filter : null,
     sort: state.library.sort,

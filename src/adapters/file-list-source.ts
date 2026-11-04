@@ -1,5 +1,5 @@
 /// <reference path="./fs-types.d.ts" />
-import { imageMimeType, isSidecarPath, pairRawWithJpeg, sidecarCandidates } from "../core/library/formats";
+import { imageMimeType, isSidecarPath, rawSiblingOf, sidecarCandidates } from "../core/library/formats";
 import type { FileOpResult, PhotoSource, SourceFile } from "../core/services";
 import type { FolderInfo } from "../core/state/types";
 
@@ -27,13 +27,8 @@ export class FileListSource implements PhotoSource {
   }
 
   async listFiles(): Promise<SourceFile[]> {
-    const { photos, companions } = pairRawWithJpeg([...this.photos.keys()]);
-    return photos
-      .map((path): SourceFile => {
-        const f = this.photos.get(path)!;
-        const companion = companions.get(path);
-        return { path, name: f.name, size: f.size, lastModified: f.lastModified, mimeType: imageMimeType(path)!, ...(companion ? { companion } : {}) };
-      })
+    return [...this.photos]
+      .map(([path, f]): SourceFile => ({ path, name: f.name, size: f.size, lastModified: f.lastModified, mimeType: imageMimeType(path)! }))
       .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
   }
 
@@ -44,7 +39,7 @@ export class FileListSource implements PhotoSource {
   }
 
   async readSidecar(photoPath: string) {
-    for (const c of sidecarCandidates(photoPath)) {
+    for (const c of sidecarCandidates(photoPath, { pairedJpeg: !!rawSiblingOf(photoPath, (p) => this.photos.has(p)) })) {
       const f = this.sidecars.get(c.toLowerCase());
       if (f) return { text: await f.text(), lastModified: f.lastModified };
     }

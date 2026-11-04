@@ -75,6 +75,22 @@
   z-index: 1;
 }
 
+/* Chip on a grouped RAW+JPEG pair, opposite the index badge. */
+.pair {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  background: rgb(0 0 0 / 0.35);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+  z-index: 1;
+}
+
 .thumb {
   width: 100%;
 }

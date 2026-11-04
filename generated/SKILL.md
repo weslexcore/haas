@@ -36,7 +36,7 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 **Folders and sidecars.** The library is one folder (with subfolders). Ratings, flags and labels are stored in the app and, when the folder was opened with write access, in XMP sidecars next to the photos so Lightroom, Bridge and darktable can read them. The contents of photos are never modified.
 
-**RAW files.** Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 and others; mimeType image/x-…) are photos like any other: rated, edited and exported the same way. A RAW and a JPEG with the same name are one photo (the RAW, with companion set to the JPEG's path); the JPEG moves with it when it is removed.
+**RAW files.** Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 and others; mimeType image/x-…) are photos like any other: rated, edited and exported the same way. While RAW+JPEG grouping is on (the default; see library.pairs.set), a RAW and a JPEG with the same name are one photo: the RAW is listed and the JPEG is hidden and moves with it when it is removed. When it is off, they are two separate photos.
 
 **Seeing photos.** Metadata (rating, flags, EXIF, capture time) comes from query actions. To judge what is in a photo (sharpness, faces, subject, colour, how an edit looks), view it with library.photos.view, which returns images with the current edits applied. Viewing costs tokens: scan with thumbnails, check focus with detail.
 
@@ -712,6 +712,31 @@ Return remembered folders (id, name, kind, whether sidecars can be written), mos
 
 *Always available.*
 
+#### Set RAW+JPEG Grouping: `library.pairs.set`
+
+Command
+
+Choose how a RAW and a JPEG with the same name are treated. Grouped (the default, as in Lightroom): they are one photo; the RAW is listed, marked +JPG, and the JPEG moves with it when it is removed. Separate: they are two photos, rated and removed independently. The choice is remembered.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `grouped` | boolean | yes | true to group each pair as one photo; false to list the RAW and the JPEG separately. |
+
+Examples:
+
+- `{"grouped":false}`: List RAW and JPEG files separately.
+- `{"grouped":true}`: Treat each RAW+JPEG pair as one photo.
+
+#### Toggle RAW+JPEG Grouping: `library.pairs.toggle`
+
+Command · Shortcuts: `shift+j`
+
+Switch between showing each RAW+JPEG pair as one photo (the JPEG hidden, removed with the RAW) and as two separate photos.
+
+*Always available.*
+
 #### List Photos: `library.photos.list`
 
 Query (no side effects)
@@ -1372,6 +1397,7 @@ Right-click on a photo in the grid or filmstrip. Acts on the selection (the clic
 - Open in Loupe: `view.set` `{"view":"loupe"}`
 - Open in Develop: `view.set` `{"view":"develop"}`
 - Select All: `library.selection.all`
+- Toggle RAW+JPEG Grouping: `library.pairs.toggle`
 - Remove Rejected Photos: `library.rejected.remove`
 
 ### Photo: `loupe.photo`

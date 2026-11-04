@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MemorySource } from "../../src/adapters/memory-source";
+import { PAIRS_SETTINGS_KEY } from "../../src/actions/library";
 import { pairRawWithJpeg } from "../../src/core/library/formats";
+import { MetadataSync } from "../../src/core/library/metadata-sync";
+import { companionOf, selectLibraryIds } from "../../src/core/state/selectors";
 import { paramsJsonSchema } from "../../src/core/manifest/build-manifest";
-import { writeXmp } from "../../src/core/xmp/xmp";
+import { parseXmp, writeXmp } from "../../src/core/xmp/xmp";
 import { requiresParams } from "../../src/core/actions/dispatcher";
 import { shouldAskForParams } from "../../src/ui/palette/schema-form";
 import { createTestRuntime } from "./helpers";
@@ -189,7 +192,7 @@ describe("RAW+JPEG pairs", () => {
     expect([...companions]).toEqual([["a/DSC_1.ARW", "a/dsc_1.jpg"]]);
   });
 
-  it("lists the pair once, and moves and restores the JPEG with the RAW", async () => {
+  async function openRawShoot() {
     const rt = await createTestRuntime({ loadSample: false });
     const source = new MemorySource({ id: "f2", name: "Raw", kind: "memory", writable: true }, {
       "DSC_1.NEF": "raw",
@@ -198,16 +201,63 @@ describe("RAW+JPEG pairs", () => {
     });
     rt.library.nextPick = source;
     await rt.dispatch("library.folder.open");
-    expect(ids(rt)).toEqual(["DSC_1.NEF", "DSC_2.NEF"]);
-    expect(rt.store.getState().photos.byId["DSC_1.NEF"]).toMatchObject({ mimeType: "image/x-nikon-nef", companion: "DSC_1.JPG" });
+    return { rt, source };
+  }
+  const listed = (rt: Awaited<ReturnType<typeof createTestRuntime>>) => selectLibraryIds(rt.store.getState());
+  const files = (source: MemorySource) => [...source.files.keys()].filter((p) => !p.endsWith(".xmp")).sort();
+
+  it("lists the pair once, and moves and restores the JPEG with the RAW", async () => {
+    const { rt, source } = await openRawShoot();
+    expect(ids(rt)).toEqual(["DSC_1.JPG", "DSC_1.NEF", "DSC_2.NEF"]); // every file is loaded…
+    expect(listed(rt)).toEqual(["DSC_1.NEF", "DSC_2.NEF"]); // …but the pair is one photo
+    expect(companionOf(rt.store.getState(), "DSC_1.NEF")).toBe("DSC_1.JPG");
+    expect(rt.store.getState().photos.byId["DSC_1.NEF"]).toMatchObject({ mimeType: "image/x-nikon-nef" });
 
     await rt.dispatch("library.flag.set", { flag: "reject", photoIds: ["DSC_1.NEF"] });
-    await rt.dispatch("library.rejected.remove");
-    expect([...source.files.keys()].filter((p) => !p.endsWith(".xmp")).sort()).toEqual(["DSC_2.NEF", "_Rejected/DSC_1.JPG", "_Rejected/DSC_1.NEF"]);
+    const r = await rt.dispatch("library.rejected.remove");
+    expect(r).toMatchObject({ ok: true, value: { removed: 1 } });
+    expect(files(source)).toEqual(["DSC_2.NEF", "_Rejected/DSC_1.JPG", "_Rejected/DSC_1.NEF"]);
+    expect(listed(rt)).toEqual(["DSC_2.NEF"]);
 
     await rt.dispatch("history.undo");
-    expect(source.files.has("DSC_1.JPG")).toBe(true);
-    expect(source.files.has("DSC_1.NEF")).toBe(true);
-    expect(ids(rt)).toEqual(["DSC_1.NEF", "DSC_2.NEF"]);
+    expect(files(source)).toEqual(["DSC_1.JPG", "DSC_1.NEF", "DSC_2.NEF"]);
+    expect(listed(rt)).toEqual(["DSC_1.NEF", "DSC_2.NEF"]);
+    expect(rt.store.getState().selection.ids).toEqual(["DSC_1.NEF"]); // the hidden JPEG isn't selected
+  });
+
+  it("ungrouped, the RAW and the JPEG are separate photos; the setting is remembered and the shortcut toggles it", async () => {
+    const { rt, source } = await openRawShoot();
+    await rt.dispatch("library.selection.set", { ids: ["DSC_1.NEF"] });
+
+    // Shift+J toggles it.
+    expect(rt.keybindings.handleKeyDown({ key: "J", shiftKey: true, metaKey: false, ctrlKey: false, altKey: false, preventDefault() {} })).toBe(true);
+    await vi.waitFor(() => expect(rt.store.getState().library.groupRawJpeg).toBe(false));
+    expect(await rt.services.settings.get(PAIRS_SETTINGS_KEY)).toBe(false);
+    expect(listed(rt)).toEqual(["DSC_1.JPG", "DSC_1.NEF", "DSC_2.NEF"]);
+    expect(companionOf(rt.store.getState(), "DSC_1.NEF")).toBeUndefined();
+
+    // Removing the RAW leaves the JPEG in the library.
+    await rt.dispatch("library.flag.set", { flag: "reject", photoIds: ["DSC_1.NEF"] });
+    await rt.dispatch("library.rejected.remove");
+    expect(files(source)).toEqual(["DSC_1.JPG", "DSC_2.NEF", "_Rejected/DSC_1.NEF"]);
+    expect(listed(rt)).toEqual(["DSC_1.JPG", "DSC_2.NEF"]);
+    await rt.dispatch("history.undo");
+
+    // Separate photos keep separate sidecars: the JPEG leaves DSC_1.xmp to the RAW.
+    const sync = new MetadataSync(rt.store, rt.services, { debounceMs: 1, onError: () => undefined });
+    sync.start();
+    await rt.dispatch("library.rating.set", { rating: 4, photoIds: ["DSC_1.JPG"] });
+    await sync.flush();
+    sync.stop();
+    expect(source.files.has("DSC_1.JPG.xmp")).toBe(true);
+    expect(source.files.has("DSC_1.xmp")).toBe(false); // the RAW's sidecar slot is untouched
+    expect(parseXmp((await source.readSidecar("DSC_1.JPG"))!.text)).toMatchObject({ rating: 4 });
+    expect(await source.readSidecar("DSC_1.NEF")).toBeNull();
+
+    // Grouping again: a selected JPEG stands for its RAW.
+    await rt.dispatch("library.selection.set", { ids: ["DSC_1.JPG", "DSC_2.NEF"] });
+    await rt.dispatch("library.pairs.set", { grouped: true });
+    expect(listed(rt)).toEqual(["DSC_1.NEF", "DSC_2.NEF"]);
+    expect(rt.store.getState().selection).toEqual({ activeId: "DSC_1.NEF", ids: ["DSC_1.NEF", "DSC_2.NEF"] });
   });
 });

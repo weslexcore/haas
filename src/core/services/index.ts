@@ -21,8 +21,6 @@ export interface SourceFile {
   size: number;
   lastModified: number;
   mimeType: string;
-  /** RAW+JPEG pair: the JPEG's path. It is not listed separately and moves with the RAW. */
-  companion?: string;
   /** Sample library only: synthetic preview colour, capture time and size (there is no real file). */
   sample?: { hue: number; capturedAt: string; width: number; height: number };
 }

@@ -50,7 +50,7 @@
     },
     {
       "term": "RAW files",
-      "explanation": "Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 and others; mimeType image/x-…) are photos like any other: rated, edited and exported the same way. A RAW and a JPEG with the same name are one photo (the RAW, with companion set to the JPEG's path); the JPEG moves with it when it is removed."
+      "explanation": "Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 and others; mimeType image/x-…) are photos like any other: rated, edited and exported the same way. While RAW+JPEG grouping is on (the default; see library.pairs.set), a RAW and a JPEG with the same name are one photo: the RAW is listed and the JPEG is hidden and moves with it when it is removed. When it is off, they are two separate photos."
     },
     {
       "term": "Seeing photos",
@@ -1675,6 +1675,58 @@
       "params": null,
       "examples": [],
       "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "library.pairs.set",
+      "title": "Set RAW+JPEG Grouping",
+      "description": "Choose how a RAW and a JPEG with the same name are treated. Grouped (the default, as in Lightroom): they are one photo; the RAW is listed, marked +JPG, and the JPEG moves with it when it is removed. Separate: they are two photos, rated and removed independently. The choice is remembered.",
+      "category": "Library",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "grouped": {
+            "type": "boolean",
+            "description": "true to group each pair as one photo; false to list the RAW and the JPEG separately."
+          }
+        },
+        "required": [
+          "grouped"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "grouped": false
+          },
+          "description": "List RAW and JPEG files separately."
+        },
+        {
+          "params": {
+            "grouped": true
+          },
+          "description": "Treat each RAW+JPEG pair as one photo."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "library.pairs.toggle",
+      "title": "Toggle RAW+JPEG Grouping",
+      "description": "Switch between showing each RAW+JPEG pair as one photo (the JPEG hidden, removed with the RAW) and as two separate photos.",
+      "category": "Library",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [
+        {
+          "keys": "shift+j"
+        }
+      ],
       "availability": "Always available."
     },
     {
@@ -4718,6 +4770,11 @@
           "kind": "action",
           "actionId": "library.selection.all",
           "label": "Select All"
+        },
+        {
+          "kind": "action",
+          "actionId": "library.pairs.toggle",
+          "label": "Toggle RAW+JPEG Grouping"
         },
         {
           "kind": "separator"
