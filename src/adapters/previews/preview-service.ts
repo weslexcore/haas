@@ -78,7 +78,8 @@ export class BrowserPreviewService implements PreviewService {
   async thumbnailUrl(photo: PhotoRecord, signal?: AbortSignal): Promise<string | null> {
     const source = this.library.current();
     if (!source || photo.placeholderHue !== undefined) return null;
-    const key = `${source.folder.id}|${photo.id}|${fileKey(photo)}`;
+    // "|2": RAW thumbnails cached before the orientation fix can be sideways.
+    const key = `${source.folder.id}|${photo.id}|${fileKey(photo)}${isRawMimeType(photo.mimeType) ? "|2" : ""}`;
     const cached = this.thumbs.get(key);
     if (cached) return cached;
 
@@ -205,11 +206,16 @@ export class BrowserPreviewService implements PreviewService {
   }
 
   async readPixels(photo: PhotoRecord, opts: { maxEdge: number }): Promise<PixelData | null> {
-    // The cached thumbnail is plenty for analysis and avoids decoding the original.
-    const url = opts.maxEdge <= THUMB_SIZE ? await this.thumbnailUrl(photo).catch(() => null) : null;
+    // The cached thumbnail is plenty for analysis and avoids decoding the original. Not for
+    // RAW: its thumbnail is the camera's JPEG, with a different tone curve from the decode
+    // Develop renders.
+    const raw = isRawMimeType(photo.mimeType);
+    const url = !raw && opts.maxEdge <= THUMB_SIZE ? await this.thumbnailUrl(photo).catch(() => null) : null;
     const bitmap = url
       ? await createImageBitmap(await (await fetch(url)).blob()).catch(() => null)
-      : await this.decode(photo, { maxEdge: opts.maxEdge });
+      : raw
+        ? await this.decodeRawRendered(photo)
+        : await this.decode(photo, { maxEdge: opts.maxEdge });
     if (!bitmap) return null;
     const s = Math.min(1, opts.maxEdge / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * s));
@@ -219,6 +225,14 @@ export class BrowserPreviewService implements PreviewService {
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
     return { width, height, data: ctx.getImageData(0, 0, width, height).data };
+  }
+
+  /** A RAW photo as Develop renders it (demosaiced, not the embedded preview), at half size. */
+  private async decodeRawRendered(photo: PhotoRecord): Promise<ImageBitmap | null> {
+    const source = this.library.current();
+    if (!source) return null;
+    const pixels = await this.raw.decode(await source.getFile(photo.id), { half: true });
+    return pixels ? createImageBitmap(pixels) : null;
   }
 
   private async decodeRaw(photo: PhotoRecord, file: File, maxEdge?: number): Promise<ImageBitmap | null> {
