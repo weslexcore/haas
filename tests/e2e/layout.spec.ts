@@ -179,3 +179,55 @@ test.describe("layout: resizable and dockable panels (sample library)", () => {
     expect(await page.evaluate(() => window.photo!.state().layout.panelSide)).toBe("left");
   });
 });
+
+test.describe("layout: grid thumbnail size (sample library)", () => {
+  const cell = (page: Page) => page.getByRole("list", { name: "Photos" }).getByRole("listitem").first();
+  const slider = (page: Page) => page.getByRole("slider", { name: "Thumbnail size" });
+  // The 1280px viewport minus padding fits 7 columns at the default 168px target, 5 at 240px, 8 at 144px.
+  const cols = async (page: Page) => Math.round((1280 - 24 + 8) / ((await box(cell(page))).width + 8));
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Open Sample Library" }).click();
+    await expect(cell(page)).toBeVisible();
+  });
+
+  test("slider changes the number of columns, persists, and double-click resets", async ({ page }) => {
+    await expect(slider(page)).toHaveValue("168");
+    expect(await cols(page)).toBe(7);
+
+    await slider(page).fill("240");
+    await expect(slider(page)).toHaveValue("240");
+    expect(await cols(page)).toBe(5);
+    // The step keys still work while the slider has focus.
+    await slider(page).press("-");
+    await expect(slider(page)).toHaveValue("216");
+    await slider(page).press("=");
+    await expect(slider(page)).toHaveValue("240");
+
+    await page.reload();
+    await expect(cell(page)).toBeVisible();
+    await expect(slider(page)).toHaveValue("240");
+    expect(await cols(page)).toBe(5);
+
+    await slider(page).dblclick();
+    await expect(slider(page)).toHaveValue("168");
+    expect(await cols(page)).toBe(7);
+  });
+
+  test("= and - step the size in Grid only", async ({ page }) => {
+    await page.keyboard.press("=");
+    await expect(slider(page)).toHaveValue("192");
+    await page.keyboard.press("-");
+    await page.keyboard.press("-");
+    await expect(slider(page)).toHaveValue("144");
+    expect(await cols(page)).toBe(8);
+
+    // Not a Loupe shortcut; the size is untouched when returning to Grid.
+    await page.keyboard.press("e");
+    await expect(page.getByRole("main", { name: "loupe view" })).toBeVisible();
+    await page.keyboard.press("=");
+    await page.keyboard.press("g");
+    await expect(slider(page)).toHaveValue("144");
+  });
+});

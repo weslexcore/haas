@@ -115,3 +115,55 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Thumbnail size slider in the filter bar. */
+.size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.sizeRange {
+  width: 96px;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.sizeRange::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+
+.sizeRange::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+
+.sizeRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 0 0 1px var(--surface-panel);
+}
+
+.sizeRange::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text-primary);
+}
+
+.sizeRange:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

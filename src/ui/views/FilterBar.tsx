@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ColorLabel, Flag, SortKey } from "../../core/state/types";
 import { isFilterActive, selectLibraryIds, selectPairs, selectVisibleIds } from "../../core/state/selectors";
 import { useAppState, useDispatch, useShortcut } from "../hooks";
@@ -19,8 +20,8 @@ const SORTS: Array<{ key: SortKey; label: string }> = [
 
 const toggle = <T,>(list: T[], value: T) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
-/** Library filter and sort controls. Every control dispatches an action. */
-export function FilterBar() {
+/** Library filter and sort controls. Every control dispatches an action. `children` go at the far right (view-specific controls). */
+export function FilterBar({ children }: { children?: ReactNode }) {
   const filter = useAppState((s) => s.library.filter);
   const sort = useAppState((s) => s.library.sort);
   const shown = useAppState((s) => selectVisibleIds(s).length);
@@ -122,6 +123,7 @@ export function FilterBar() {
         </button>
       )}
       {removed > 0 && <RemovedPhotos count={removed} />}
+      {children}
     </div>
   );
 }

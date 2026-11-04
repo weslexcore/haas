@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppContext } from "../core/actions/types";
 import { defineAction } from "../core/actions/types";
+import { inView } from "../core/actions/when";
 import { LAYOUT_LIMITS, clampFloat, clampLayoutValue, initialLayout, type LayoutState } from "../core/state/layout";
 
 export const LAYOUT_SETTINGS_KEY = "view.layout";
@@ -171,12 +172,57 @@ export const resizeFilmstrip = defineAction({
   },
 });
 
+const GRID = LAYOUT_LIMITS.gridCellWidth;
+
+export const setGridSize = defineAction({
+  id: "view.grid.size.set",
+  title: "Set Grid Thumbnail Size",
+  description: `Set how big the thumbnails in Grid are: the target cell width in pixels (${GRID.min}–${GRID.max}); the grid fits as many columns of that width as it can. Omit the width to restore the default. The choice is remembered.`,
+  category: "View",
+  kind: "command",
+  sideEffects: true,
+  params: z.object({ width: z.number().optional().describe("Thumbnail cell width in px. Omit for the default size.") }).optional(),
+  examples: [
+    { params: { width: 320 }, description: "Big thumbnails, a few per row." },
+    { params: { width: 96 }, description: "Tiny thumbnails, many per row." },
+    { params: undefined, description: "Restore the default thumbnail size." },
+  ],
+  async run(params, ctx) {
+    ctx.update((s) => {
+      s.layout.gridCellWidth = clampLayoutValue(params?.width ?? GRID.default, GRID);
+    });
+    await persistLayout(ctx);
+  },
+});
+
+export const stepGridSize = defineAction({
+  id: "view.grid.size.step",
+  title: "Grid Thumbnails Larger / Smaller",
+  description: `Make the Grid thumbnails one step (${GRID.step}px) larger or smaller. Stops at the limits (${GRID.min}–${GRID.max}px).`,
+  category: "View",
+  kind: "command",
+  sideEffects: true,
+  when: inView("grid"),
+  params: z.object({ direction: z.enum(["larger", "smaller"]).describe("Which way to step.") }),
+  examples: [{ params: { direction: "larger" }, description: "Bigger thumbnails." }],
+  defaultShortcuts: [
+    { keys: "=", params: { direction: "larger" } },
+    { keys: "-", params: { direction: "smaller" } },
+  ],
+  label: ({ direction }) => (direction === "larger" ? "Larger Grid Thumbnails" : "Smaller Grid Thumbnails"),
+  async run({ direction }, ctx) {
+    const delta = direction === "larger" ? GRID.step : -GRID.step;
+    const r = await ctx.dispatch(setGridSize.id, { width: ctx.state.layout.gridCellWidth + delta });
+    if (!r.ok) throw new Error(r.message);
+  },
+});
+
 const floatSchema = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() });
 
 export const restoreLayout = defineAction({
   id: "view.layout.restore",
   title: "Restore Saved Layout",
-  description: "Startup plumbing: applies the remembered panel and filmstrip layout. Unknown or out-of-range values fall back to the defaults.",
+  description: "Startup plumbing: applies the remembered panel, filmstrip and grid layout. Unknown or out-of-range values fall back to the defaults.",
   category: "View",
   kind: "command",
   internal: true,
@@ -188,6 +234,7 @@ export const restoreLayout = defineAction({
         panelDocked: z.boolean().optional(),
         panelFloat: floatSchema.optional(),
         filmstripHeight: z.number().optional(),
+        gridCellWidth: z.number().optional(),
       })
       .describe("Saved layout, possibly partial."),
   }),
@@ -199,6 +246,7 @@ export const restoreLayout = defineAction({
       panelDocked: layout.panelDocked ?? initialLayout.panelDocked,
       panelFloat: clampFloat(layout.panelFloat ?? initialLayout.panelFloat),
       filmstripHeight: clampLayoutValue(layout.filmstripHeight ?? initialLayout.filmstripHeight, LAYOUT_LIMITS.filmstripHeight),
+      gridCellWidth: clampLayoutValue(layout.gridCellWidth ?? initialLayout.gridCellWidth, GRID),
     };
     ctx.update((s) => {
       s.layout = next;
@@ -206,4 +254,4 @@ export const restoreLayout = defineAction({
   },
 });
 
-export const layoutActions = [setPanelSide, togglePanelSide, undockPanel, dockPanel, togglePanelDock, resizePanel, movePanel, resizeFilmstrip, restoreLayout];
+export const layoutActions = [setPanelSide, togglePanelSide, undockPanel, dockPanel, togglePanelDock, resizePanel, movePanel, resizeFilmstrip, setGridSize, stepGridSize, restoreLayout];

@@ -19,11 +19,14 @@ export interface LayoutState {
   panelFloat: FloatRect;
   /** Filmstrip height in Loupe and Develop, px. */
   filmstripHeight: number;
+  /** Target width of a Grid thumbnail cell, px; the grid fits as many such columns as it can. */
+  gridCellWidth: number;
 }
 
 export const LAYOUT_LIMITS = {
   panelWidth: { min: 220, max: 640, default: 300 },
   filmstripHeight: { min: 56, max: 360, default: 96 },
+  gridCellWidth: { min: 96, max: 480, default: 168, step: 24 },
   floatWidth: { min: 240, max: 900 },
   floatHeight: { min: 200, max: 2000 },
 } as const;
@@ -34,6 +37,7 @@ export const initialLayout: LayoutState = {
   panelDocked: true,
   panelFloat: { x: 80, y: 80, width: 340, height: 600 },
   filmstripHeight: LAYOUT_LIMITS.filmstripHeight.default,
+  gridCellWidth: LAYOUT_LIMITS.gridCellWidth.default,
 };
 
 export function clampLayoutValue(value: number, limit: { min: number; max: number }): number {

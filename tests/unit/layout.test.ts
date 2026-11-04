@@ -64,10 +64,35 @@ describe("layout actions", () => {
     expect(rt.store.getState().layout.filmstripHeight).toBe(LAYOUT_LIMITS.filmstripHeight.default);
   });
 
+  it("sets, steps and clamps the grid thumbnail size; stepping is only for Grid", async () => {
+    const rt = await createTestRuntime({ loadSample: false });
+    const grid = LAYOUT_LIMITS.gridCellWidth;
+    expect(rt.store.getState().layout.gridCellWidth).toBe(grid.default);
+    await rt.dispatch("view.grid.size.set", { width: 9999 });
+    expect(rt.store.getState().layout.gridCellWidth).toBe(grid.max);
+    await rt.dispatch("view.grid.size.set");
+    expect(rt.store.getState().layout.gridCellWidth).toBe(grid.default);
+
+    expect((await rt.dispatch("view.grid.size.step", { direction: "larger" })).ok).toBe(true);
+    expect(rt.store.getState().layout.gridCellWidth).toBe(grid.default + grid.step);
+    await rt.dispatch("view.grid.size.step", { direction: "smaller" });
+    await rt.dispatch("view.grid.size.step", { direction: "smaller" });
+    expect(rt.store.getState().layout.gridCellWidth).toBe(grid.default - grid.step);
+    await rt.dispatch("view.grid.size.set", { width: grid.min });
+    await rt.dispatch("view.grid.size.step", { direction: "smaller" });
+    expect(rt.store.getState().layout.gridCellWidth).toBe(grid.min);
+    expect(await rt.services.settings.get(LAYOUT_SETTINGS_KEY)).toMatchObject({ gridCellWidth: grid.min });
+
+    await rt.dispatch("view.set", { view: "loupe" });
+    expect((await rt.dispatch("view.grid.size.step", { direction: "larger" })).ok).toBe(false);
+    expect(rt.store.getState().layout.gridCellWidth).toBe(grid.min);
+  });
+
   it("sizes are not undo steps", async () => {
     const rt = await createTestRuntime({ loadSample: false });
     await rt.dispatch("view.panel.resize", { width: 400 });
     await rt.dispatch("view.filmstrip.resize", { height: 150 });
+    await rt.dispatch("view.grid.size.step", { direction: "larger" });
     expect(rt.history.canUndo).toBe(false);
   });
 
@@ -83,6 +108,7 @@ describe("layout actions", () => {
       panelDocked: false,
       panelFloat: { x: 10, y: 20, width: 300, height: 400 },
       filmstripHeight: LAYOUT_LIMITS.filmstripHeight.default,
+      gridCellWidth: LAYOUT_LIMITS.gridCellWidth.default,
     });
 
     const bad = await rt.dispatch("view.layout.restore", { layout: { panelSide: "top" } });

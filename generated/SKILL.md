@@ -435,6 +435,40 @@ Show or hide the strip of thumbnails below the photo in Loupe and Develop.
 
 *Always available.*
 
+#### Set Grid Thumbnail Size: `view.grid.size.set`
+
+Command
+
+Set how big the thumbnails in Grid are: the target cell width in pixels (96–480); the grid fits as many columns of that width as it can. Omit the width to restore the default. The choice is remembered.
+
+*Always available.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `width` | number | no | Thumbnail cell width in px. Omit for the default size. |
+
+Examples:
+
+- `{"width":320}`: Big thumbnails, a few per row.
+- `{"width":96}`: Tiny thumbnails, many per row.
+- `undefined`: Restore the default thumbnail size.
+
+#### Grid Thumbnails Larger / Smaller: `view.grid.size.step`
+
+Command · Shortcuts: `=` → `{"direction":"larger"}`, `-` → `{"direction":"smaller"}`
+
+Make the Grid thumbnails one step (24px) larger or smaller. Stops at the limits (96–480px).
+
+*Available only when the current view is Grid.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `direction` | `"larger"` \| `"smaller"` | yes | Which way to step. |
+
+Examples:
+
+- `{"direction":"larger"}`: Bigger thumbnails.
+
 #### Toggle Info Overlay: `view.info.toggle`
 
 Command · Shortcuts: `i`

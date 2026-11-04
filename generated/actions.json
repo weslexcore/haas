@@ -992,6 +992,89 @@
       "availability": "Always available."
     },
     {
+      "id": "view.grid.size.set",
+      "title": "Set Grid Thumbnail Size",
+      "description": "Set how big the thumbnails in Grid are: the target cell width in pixels (96–480); the grid fits as many columns of that width as it can. Omit the width to restore the default. The choice is remembered.",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "description": "Thumbnail cell width in px. Omit for the default size.",
+            "type": "number"
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {
+            "width": 320
+          },
+          "description": "Big thumbnails, a few per row."
+        },
+        {
+          "params": {
+            "width": 96
+          },
+          "description": "Tiny thumbnails, many per row."
+        },
+        {
+          "description": "Restore the default thumbnail size."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Always available."
+    },
+    {
+      "id": "view.grid.size.step",
+      "title": "Grid Thumbnails Larger / Smaller",
+      "description": "Make the Grid thumbnails one step (24px) larger or smaller. Stops at the limits (96–480px).",
+      "category": "View",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "larger",
+              "smaller"
+            ],
+            "description": "Which way to step."
+          }
+        },
+        "required": [
+          "direction"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "direction": "larger"
+          },
+          "description": "Bigger thumbnails."
+        }
+      ],
+      "defaultShortcuts": [
+        {
+          "keys": "=",
+          "params": {
+            "direction": "larger"
+          }
+        },
+        {
+          "keys": "-",
+          "params": {
+            "direction": "smaller"
+          }
+        }
+      ],
+      "availability": "Available only when the current view is Grid."
+    },
+    {
       "id": "view.info.toggle",
       "title": "Toggle Info Overlay",
       "description": "Show or hide capture details (camera, lens, exposure, time) over the photo in Loupe and Develop.",

@@ -28,6 +28,7 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | Caps Lock | Auto-advance after rating/flagging (configurable: "Set Auto-Advance" in the palette) |
 | `Shift+F10`, right-click | Photo context menu |
 | `Z`, `I` | Loupe zoom, info overlay |
+| `=` `-`, or the slider in the filter bar | Larger or smaller Grid thumbnails (double-click the slider to reset) |
 | `F6` | Show or hide the filmstrip (or the chevron at its top-right corner / along the bottom edge) |
 | `F7`, `Shift+F7` | Undock or dock the Develop panel; move it to the other side |
 | Drag the filmstrip's top edge, or the Develop panel's edge | Resize them (double-click resets; arrow keys work when focused) |

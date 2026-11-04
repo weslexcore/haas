@@ -1,8 +1,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { LAYOUT_LIMITS } from "../../core/state/layout";
 import { companionOf, selectVisibleIds } from "../../core/state/selectors";
 import type { PhotoRecord } from "../../core/state/types";
-import { useAppState } from "../hooks";
+import { useAppState, useDispatch, useShortcut } from "../hooks";
+import { Icon } from "../shell/Icon";
 import { FilterBar } from "./FilterBar";
 import { usePhotoInteractions } from "./photo-interactions";
 import { FlagMark, LabelDot, Stars } from "./PhotoMeta";
@@ -11,7 +13,6 @@ import styles from "./GridView.module.css";
 
 const PAD = 12;
 const GAP = 8;
-const MIN_CELL = 168;
 const CELL_CHROME = 16 + 44; // padding + meta rows
 
 /** Virtualized thumbnail grid: only rows near the viewport are rendered. */
@@ -20,6 +21,7 @@ export function GridView() {
   const byId = useAppState((s) => s.photos.byId);
   const { activeId, ids } = useAppState((s) => s.selection);
   const selected = new Set(ids);
+  const cellTarget = useAppState((s) => s.layout.gridCellWidth);
   const { select, openMenu, dispatch } = usePhotoInteractions("grid.photo");
   const openLoupe = useCallback(() => void dispatch("view.set", { view: "loupe" }), [dispatch]);
 
@@ -34,7 +36,7 @@ export function GridView() {
   }, []);
 
   const inner = Math.max(0, width - PAD * 2);
-  const cols = Math.max(1, Math.floor((inner + GAP) / (MIN_CELL + GAP)));
+  const cols = Math.max(1, Math.floor((inner + GAP) / (cellTarget + GAP)));
   const cellWidth = (inner - GAP * (cols - 1)) / cols;
   const rowHeight = Math.round(((cellWidth - 16) * 2) / 3 + CELL_CHROME + GAP);
   const rowCount = Math.ceil(visible.length / cols);
@@ -57,7 +59,9 @@ export function GridView() {
 
   return (
     <div className={styles.layout}>
-      <FilterBar />
+      <FilterBar>
+        <GridSizeSlider />
+      </FilterBar>
       <div ref={scrollRef} className={styles.scroller}>
         {visible.length === 0 ? (
           <p className={styles.noMatches}>No photos match the filter.</p>
@@ -98,6 +102,39 @@ export function GridView() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Thumbnail size: a slider at the right end of the filter bar. Double-click restores the default. */
+function GridSizeSlider() {
+  const width = useAppState((s) => s.layout.gridCellWidth);
+  const dispatch = useDispatch();
+  const larger = useShortcut("view.grid.size.step", { direction: "larger" });
+  const smaller = useShortcut("view.grid.size.step", { direction: "smaller" });
+  const { min, max, step } = LAYOUT_LIMITS.gridCellWidth;
+  const keys = larger && smaller ? ` (${smaller.strokes.join(" ")} / ${larger.strokes.join(" ")})` : "";
+  return (
+    <label className={styles.size} title={`Thumbnail size${keys}; double-click to reset`}>
+      <Icon name="grid" size={14} />
+      <input
+        type="range"
+        className={styles.sizeRange}
+        aria-label="Thumbnail size"
+        min={min}
+        max={max}
+        step={step}
+        value={width}
+        onChange={(e) => void dispatch("view.grid.size.set", { width: Number(e.target.value) })}
+        onDoubleClick={() => void dispatch("view.grid.size.set")}
+        onKeyDown={(e) => {
+          // Global shortcuts pause while an input has focus; keep the step keys working on the slider itself.
+          const direction = e.key === "=" || e.key === "+" ? "larger" : e.key === "-" ? "smaller" : null;
+          if (!direction) return;
+          e.preventDefault();
+          void dispatch("view.grid.size.step", { direction });
+        }}
+      />
+    </label>
   );
 }
 
