@@ -1,16 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./ui/App";
-import { createBrowserRuntime } from "./ui/bootstrap";
-import { RuntimeProvider } from "./ui/runtime-context";
+import { readAuthMode } from "./adapters/auth/supabase-auth";
+import { AuthGate } from "./ui/auth/AuthGate";
 import "./ui/styles/global.css";
 
-const runtime = await createBrowserRuntime();
-
+// The gate signs the user in, then creates the runtime and renders the app.
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <RuntimeProvider runtime={runtime}>
-      <App />
-    </RuntimeProvider>
+    <AuthGate mode={readAuthMode(import.meta.env)} />
   </StrictMode>,
 );

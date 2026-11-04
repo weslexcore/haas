@@ -9,7 +9,7 @@ import type { AnyAction } from "../../src/core/actions/types";
 import type { MenuDefinition } from "../../src/core/menus/registry";
 import { createRuntime, type Runtime } from "../../src/core/runtime";
 import type { LibraryProvider, PhotoIndexData, PhotoSource, PreviewService } from "../../src/core/services";
-import type { PhotoRecord } from "../../src/core/state/types";
+import type { Account, PhotoRecord } from "../../src/core/state/types";
 import { allMenus } from "../../src/menus";
 
 /** Library provider for tests: the sample library, plus folders a test hands it. */
@@ -83,6 +83,7 @@ export function makeImage(width: number, height: number, fill: (x: number, y: nu
 export const solidImage = (r: number, g: number, b: number) => makeImage(16, 16, () => [r, g, b]);
 
 export interface TestRuntime extends Runtime {
+  auth: { signedOut: number; passkeys: number };
   downloads: Array<{ fileName: string; content: string }>;
   exports: Array<{ recipe: unknown; opts: unknown }>;
   library: TestLibraryProvider;
@@ -97,17 +98,21 @@ export async function createTestRuntime(
     menus?: readonly MenuDefinition[];
     previews?: PreviewService;
     loadSample?: boolean;
+    account?: Account | null;
   } = {},
 ): Promise<TestRuntime> {
   const downloads: TestRuntime["downloads"] = [];
   const exports: TestRuntime["exports"] = [];
   const library = new TestLibraryProvider(opts.photos ?? 10);
   const metadata = new MemoryMetadataStore();
+  const auth = { signedOut: 0, passkeys: 0, signOut: async () => void auth.signedOut++, addPasskey: async () => (auth.passkeys++, { name: "Test Passkey" }) };
   const runtime = createRuntime({
     actions: opts.actions ?? allActions,
     menus: opts.menus ?? allMenus,
     platform: { isMac: opts.isMac ?? false, prefersDark: () => false },
+    initialState: { account: opts.account ?? null },
     services: {
+      auth,
       settings: new MemorySettingsStore(),
       library,
       metadata,
@@ -131,7 +136,7 @@ export async function createTestRuntime(
   });
   await runtime.keybindings.load();
   if (opts.loadSample !== false && runtime.registry.get("library.sample.load")) await runtime.dispatch("library.sample.load");
-  return Object.assign(runtime, { downloads, exports, library, metadata });
+  return Object.assign(runtime, { auth, downloads, exports, library, metadata });
 }
 
 export function key(

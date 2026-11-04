@@ -59,6 +59,10 @@
   --text-secondary: #a9afba;
   --text-muted: #727a88;
 
+  --brand: #e8b34b;
+  --brand-light: #fff1cf;
+  --brand-glow: rgb(232 179 75 / 0.14);
+
   --accent: #e8b34b;
   --accent-hover: #f0c266;
   --accent-soft: rgb(232 179 75 / 0.16);
@@ -89,6 +93,10 @@
   --text-primary: #1b1e24;
   --text-secondary: #4b525e;
   --text-muted: #7a828f;
+
+  --brand: #c48a1c;
+  --brand-light: #e8b34b;
+  --brand-glow: rgb(196 138 28 / 0.12);
 
   --accent: #b47a10;
   --accent-hover: #9a680c;

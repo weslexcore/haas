@@ -45,7 +45,7 @@ const LABELS: Record<Exclude<ColorLabel, "none">, string> = {
 };
 
 const EMPTY_PACKET = `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="${NS.x}" x:xmptk="Photo">
+<x:xmpmeta xmlns:x="${NS.x}" x:xmptk="Photon">
  <rdf:RDF xmlns:rdf="${NS.rdf}">
   <rdf:Description rdf:about=""/>
  </rdf:RDF>

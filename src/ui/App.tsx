@@ -69,7 +69,7 @@ function useResultToasts() {
   useEffect(
     () =>
       dispatcher.onDispatch(({ id, result }) => {
-        if (!result.ok || !["library.rejected.remove", "library.removed.restore", "library.removed.empty", "develop.export"].includes(id)) return;
+        if (!result.ok || !["library.rejected.remove", "library.removed.restore", "library.removed.empty", "develop.export", "app.account.passkey.add"].includes(id)) return;
         const v = (result.value ?? {}) as {
           removed?: number;
           restored?: number;
@@ -81,6 +81,7 @@ function useResultToasts() {
         const n = (k: number) => (k === 1 ? "1 photo" : `${k} photos`);
         if (id === "library.rejected.remove" && v.removed) toast(`Moved ${n(v.removed)} to the _Rejected folder. Undo brings them back.`);
         if (id === "library.removed.restore" && v.restored) toast(`Restored ${n(v.restored)}.`);
+        if (id === "app.account.passkey.add") toast("Passkey added. Next time, sign in with it.");
         if (id === "library.removed.empty") toast(`Permanently deleted ${n(v.deleted ?? 0)}.`);
         if (id === "develop.export" && v.exported) {
           toast(v.destination === "folder" ? `Exported ${n(v.exported)} to the _Exports folder.` : `Exported ${n(v.exported)} as downloads.`);

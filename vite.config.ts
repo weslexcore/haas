@@ -46,9 +46,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        name: "Photo",
-        short_name: "Photo",
-        description: "Browser-based photo culling and editing",
+        name: "Photon",
+        short_name: "Photon",
+        description: "Cull, develop and export photos in your browser",
         theme_color: "#16181d",
         background_color: "#16181d",
         display: "standalone",

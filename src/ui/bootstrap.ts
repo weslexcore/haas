@@ -14,7 +14,8 @@ import { detectMac } from "../core/keybindings/combo";
 import { MetadataSync } from "../core/library/metadata-sync";
 import { buildManifest } from "../core/manifest/build-manifest";
 import { createRuntime, type Runtime } from "../core/runtime";
-import type { Services } from "../core/services";
+import type { AuthService, Services } from "../core/services";
+import type { Account } from "../core/state/types";
 import { allMenus } from "../menus";
 import { loadRecents } from "./palette/recents";
 import { toast } from "./toasts";
@@ -36,7 +37,7 @@ declare global {
   }
 }
 
-export async function createBrowserRuntime(): Promise<Runtime> {
+export async function createBrowserRuntime({ auth, account }: { auth: AuthService; account: Account | null }): Promise<Runtime> {
   const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
   const db = new PhotoDB();
   const library = new BrowserLibraryProvider(db);
@@ -46,6 +47,7 @@ export async function createBrowserRuntime(): Promise<Runtime> {
   let sync: MetadataSync | null = null;
   const previews = new BrowserPreviewService(library, db);
   const services: Services = {
+    auth,
     settings: settingsStore,
     library,
     metadata: new DexieMetadataStore(db),
@@ -61,6 +63,7 @@ export async function createBrowserRuntime(): Promise<Runtime> {
     menus: allMenus,
     platform: { isMac: detectMac(), prefersDark: () => darkQuery.matches },
     services,
+    initialState: { account },
   });
 
   const metadataSync = new MetadataSync(runtime.store, services, { onError: (message) => toast(message, "error", 8000) });
