@@ -31,7 +31,7 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | `⌘L` / `Ctrl+L` | Clear filter |
 | `⌘⌫` / `Ctrl+Backspace` | Remove rejected photos (moved to `_Rejected/`; restore or delete them from the filter bar) |
 | `\` | Before/after (Develop only) |
-| `R` | Crop & straighten tool (Develop) |
+| `R` | Crop & straighten tool (Loupe or Develop): drag outside the crop to rotate, ⌘/Ctrl-drag along a horizon to level it |
 | `⌘⇧C` / `⌘⇧V` / `⌘⇧S` | Copy / paste / sync develop settings |
 | `⌘⇧R` | Reset develop settings |
 | `⌘⇧E` | Export JPEG (to `_Exports/`, or downloads for read-only folders) |

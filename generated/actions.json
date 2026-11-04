@@ -2000,6 +2000,80 @@
       "availability": "Available only when at least one photo is selected."
     },
     {
+      "id": "develop.crop.level",
+      "title": "Straighten Along Line",
+      "description": "Straighten the active photo so a line along a horizon or vertical edge becomes level (horizontal, or vertical when the line is closer to vertical). from/to are fractions (0–1, y down) of the uncropped photo as currently straightened; with no straighten angle yet, that is the original photo. The crop is kept inside the rotated photo.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": true,
+      "params": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "description": "One end of the line."
+          },
+          "to": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "description": "The other end."
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
+      "examples": [
+        {
+          "params": {
+            "from": {
+              "x": 0.1,
+              "y": 0.52
+            },
+            "to": {
+              "x": 0.9,
+              "y": 0.48
+            }
+          },
+          "description": "Level a horizon that rises to the right."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when a photo is active."
+    },
+    {
       "id": "develop.crop.set",
       "title": "Crop & Straighten",
       "description": "Set the crop rectangle (fractions of the straightened photo: x, y, width, height) and/or straighten angle (-45 to 45 degrees) on the selected photos. The crop is kept inside the rotated photo automatically. Use aspect to crop to a ratio, as large as fits.",
@@ -2092,7 +2166,7 @@
     {
       "id": "develop.cropTool.toggle",
       "title": "Crop Tool",
-      "description": "Show or hide the crop & straighten overlay in Develop, where the crop can be dragged and resized.",
+      "description": "Show or hide the crop & straighten overlay on the active photo in Loupe or Develop, where the crop can be moved, resized and rotated.",
       "category": "Develop",
       "kind": "command",
       "undoable": false,
@@ -2103,7 +2177,7 @@
           "keys": "r"
         }
       ],
-      "availability": "Available only when the current view is Develop and a photo is active."
+      "availability": "Available only when the current view is Loupe or Develop and a photo is active."
     },
     {
       "id": "develop.export",
@@ -2239,6 +2313,37 @@
       ],
       "defaultShortcuts": [],
       "availability": "Available only when at least one photo is selected."
+    },
+    {
+      "id": "develop.levelTool.toggle",
+      "title": "Straighten Tool",
+      "description": "Arm or disarm the straighten tool in Loupe or Develop: the next drag over the photo draws a line along a horizon or vertical edge, and the photo is rotated to make it level. Opens the crop overlay. (In the crop overlay, ⌘/Ctrl-drag does the same without arming it.)",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": false,
+      "params": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "description": "Arm (true) or disarm (false); omit to toggle.",
+            "type": "boolean"
+          }
+        }
+      },
+      "examples": [
+        {
+          "params": {},
+          "description": "Toggle the straighten tool."
+        },
+        {
+          "params": {
+            "on": false
+          },
+          "description": "Disarm it."
+        }
+      ],
+      "defaultShortcuts": [],
+      "availability": "Available only when the current view is Loupe or Develop and a photo is active."
     },
     {
       "id": "develop.reset",
@@ -3243,6 +3348,11 @@
         },
         {
           "kind": "separator"
+        },
+        {
+          "kind": "action",
+          "actionId": "develop.cropTool.toggle",
+          "label": "Crop & Straighten"
         },
         {
           "kind": "action",

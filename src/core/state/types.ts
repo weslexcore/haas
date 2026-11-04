@@ -96,6 +96,8 @@ export interface DevelopState {
   clipboard: { recipe: EditRecipe; groups: SettingsGroup[] } | null;
   /** Crop & straighten overlay is active. */
   cropTool: boolean;
+  /** In the crop overlay, the next drag draws a line to straighten along. */
+  levelTool: boolean;
 }
 
 export interface AppState {
@@ -152,7 +154,7 @@ export const initialState: AppState = {
   palette: { open: false, actionId: null },
   contextMenu: null,
   shortcutsOpen: false,
-  develop: { clipboard: null, cropTool: false },
+  develop: { clipboard: null, cropTool: false, levelTool: false },
   ai: { previewing: false, settingsOpen: false, panelOpen: false, thread: [] },
   library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0 },
   photos: { order: [], byId: {} },

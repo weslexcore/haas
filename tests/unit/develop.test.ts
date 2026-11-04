@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyAffine, constrainCrop, cropForAspect, cropOutputSize, cropToSourceAffine } from "../../src/core/develop/crop";
+import { applyAffine, constrainCrop, cropForAspect, cropOutputSize, cropToSourceAffine, levelAngle, rotateByDrag } from "../../src/core/develop/crop";
 import { processPixel, uniformsFor, wbGains, LUMA, computeHistogram } from "../../src/core/develop/pipeline";
 import { applyPartial, defaultRecipe, isDefaultRecipe, mergeGroups, normalizeCurve, recipeSchema } from "../../src/core/develop/recipe";
 import { curveLut, monotoneCurve } from "../../src/core/develop/tone-curve";
@@ -90,6 +90,28 @@ describe("tone curve", () => {
 describe("crop geometry", () => {
   const src = { width: 3000, height: 2000 };
 
+  it("dragging clockwise around the centre rotates clockwise", () => {
+    const c = { x: 0, y: 0 };
+    expect(rotateByDrag(0, c, { x: 100, y: 0 }, { x: 100, y: 10 })).toBeCloseTo(5.71, 1);
+    expect(rotateByDrag(3, c, { x: 100, y: 0 }, { x: 100, y: -10 })).toBeCloseTo(3 - 5.71, 1);
+    // Across the ±180° seam, and clamped to ±45.
+    expect(rotateByDrag(0, c, { x: -100, y: -1 }, { x: -100, y: 1 })).toBeCloseTo(-1.15, 1);
+    expect(rotateByDrag(40, c, { x: 100, y: 0 }, { x: 0, y: 100 })).toBe(45);
+  });
+
+  it("levels a line to the nearest horizontal or vertical", () => {
+    // A horizon dropping 2% of the height over the full width (y down): tilted clockwise.
+    const tilt = (Math.atan2(0.02 * 2000, 3000) * 180) / Math.PI;
+    expect(levelAngle(src, 0, { x: 0, y: 0.5 }, { x: 1, y: 0.52 })).toBeCloseTo(-tilt, 1);
+    // Same line drawn right to left gives the same answer.
+    expect(levelAngle(src, 0, { x: 1, y: 0.52 }, { x: 0, y: 0.5 })).toBeCloseTo(-tilt, 1);
+    // Relative to the current angle.
+    expect(levelAngle(src, 2, { x: 0, y: 0.5 }, { x: 1, y: 0.52 })).toBeCloseTo(2 - tilt, 1);
+    // A near-vertical edge whose top leans right is also tilted clockwise.
+    expect(levelAngle(src, 0, { x: 0.5, y: 1 }, { x: 0.52, y: 0 })).toBeCloseTo(-(Math.atan2(0.02 * 3000, 2000) * 180) / Math.PI, 1);
+    expect(levelAngle(src, 0, { x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 })).toBeNull();
+  });
+
   it("identity crop maps uv straight through", () => {
     const m = cropToSourceAffine(src, defaultRecipe().crop);
     expect(applyAffine(m, 0.25, 0.75)).toEqual([0.25, 0.75]);
@@ -168,6 +190,34 @@ describe("develop actions", () => {
     expect(editOf(rt)!.crop).toMatchObject({ width: expect.closeTo(2 / 3, 5), height: 1 });
     await rt.dispatch("develop.crop.set", { angle: 20 });
     expect(editOf(rt)!.crop.height).toBeLessThan(1);
+  });
+
+  it("straightens along a drawn line, in one undo step", async () => {
+    const rt = await createTestRuntime(); // 1500×1000
+    await rt.dispatch("develop.crop.level", { from: { x: 0.1, y: 0.5 }, to: { x: 0.9, y: 0.54 } });
+    const crop = editOf(rt)!.crop;
+    expect(crop.angle).toBeCloseTo(-(Math.atan2(0.04 * 1000, 0.8 * 1500) * 180) / Math.PI, 1);
+    expect(crop.width).toBeLessThan(1); // shrunk to stay inside the rotated photo
+    expect(rt.history.getSnapshot().undoLabel).toBe("Straighten");
+    await rt.dispatch("history.undo");
+    expect(editOf(rt)).toBeUndefined();
+  });
+
+  it("the straighten tool opens the crop overlay and closes with it", async () => {
+    const rt = await createTestRuntime();
+    await rt.dispatch("view.set", { view: "develop" });
+    expect(await rt.dispatch("develop.levelTool.toggle")).toMatchObject({ ok: true });
+    expect(rt.store.getState().develop).toMatchObject({ levelTool: true, cropTool: true });
+    await rt.dispatch("develop.cropTool.toggle");
+    expect(rt.store.getState().develop).toMatchObject({ levelTool: false, cropTool: false });
+  });
+
+  it("cropping is available in Loupe and Develop, not Grid", async () => {
+    const rt = await createTestRuntime();
+    expect(await rt.dispatch("develop.cropTool.toggle")).toMatchObject({ ok: false }); // grid
+    await rt.dispatch("view.set", { view: "loupe" });
+    expect(await rt.dispatch("develop.cropTool.toggle")).toMatchObject({ ok: true });
+    expect(rt.store.getState()).toMatchObject({ view: "loupe", develop: { cropTool: true } });
   });
 
   it("export renders each photo with its edit and saves it", async () => {

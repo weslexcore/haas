@@ -4,6 +4,9 @@ import type { PhotoRecord } from "../../core/state/types";
 import { useAppState, useDispatch } from "../hooks";
 import { useRuntime } from "../runtime-context";
 import { FlagMark, LabelDot, Placeholder, Stars, formatCaptured, formatExposure } from "./PhotoMeta";
+import { defaultRecipe } from "../../core/develop/recipe";
+import { CropBar } from "../develop/CropBar";
+import { CropOverlay } from "../develop/CropOverlay";
 import { DevelopCanvas } from "../develop/DevelopCanvas";
 import styles from "./PhotoStage.module.css";
 
@@ -51,6 +54,8 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
   const photo = useAppState((s) => (s.selection.activeId ? s.photos.byId[s.selection.activeId] : undefined));
   const zoom = useAppState((s) => (zoomable ? s.zoom : "fit"));
   const info = useAppState((s) => s.infoOverlay);
+  const cropTool = useAppState((s) => zoomable && s.develop.cropTool);
+  const levelTool = useAppState((s) => s.develop.levelTool);
   const dispatch = useDispatch();
   const { url, error } = useImageUrl(photo);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -66,6 +71,22 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
   }, [zoom, url]);
 
   if (!photo) return <div className={styles.stage} />;
+
+  // Cropping in Loupe: the whole straightened frame with the crop overlay, as in Develop.
+  if (cropTool) {
+    const crop = (photo.edit ?? defaultRecipe()).crop;
+    return (
+      <div className={styles.editedStage}>
+        <DevelopCanvas
+          key={photo.id}
+          photo={photo}
+          ignoreCrop
+          overlay={(display) => <CropOverlay crop={crop} display={display} levelTool={levelTool} />}
+        />
+        <CropBar photo={photo} />
+      </div>
+    );
+  }
 
   // Edited photos render through the develop pipeline so Loupe shows the edits.
   if (photo.edit) {

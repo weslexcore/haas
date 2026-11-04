@@ -133,3 +133,40 @@ export function cropForAspect(src: Size, aspect: number, angle: number): CropRec
   }
   return constrainCrop(src, { x: (1 - w) / 2, y: (1 - h) / 2, width: w, height: h, angle });
 }
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+const clampAngle = (a: number) => Math.round(Math.min(45, Math.max(-45, a)) * 100) / 100;
+
+/**
+ * Straighten angle after dragging around `center` from `start` to `current`
+ * (any isotropic coordinates, y down). Dragging clockwise rotates the photo
+ * clockwise.
+ */
+export function rotateByDrag(angle: number, center: Point, start: Point, current: Point): number {
+  const a0 = Math.atan2(start.y - center.y, start.x - center.x);
+  const a1 = Math.atan2(current.y - center.y, current.x - center.x);
+  let delta = ((a1 - a0) * 180) / Math.PI;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  return clampAngle(angle + delta);
+}
+
+/**
+ * Straighten angle that makes a line drawn on the straightened frame level:
+ * horizontal if it is closer to horizontal, otherwise vertical. `from`/`to`
+ * are fractions of the frame (0–1, y down); `src` gives its pixel shape.
+ * Returns null for a line too short to measure.
+ */
+export function levelAngle(src: Size, angle: number, from: Point, to: Point): number | null {
+  const dx = (to.x - from.x) * src.width;
+  const dy = (to.y - from.y) * src.height;
+  if (Math.hypot(dx, dy) < 1e-3 * Math.max(src.width, src.height)) return null;
+  let tilt = (Math.atan2(dy, dx) * 180) / Math.PI; // clockwise from horizontal, −180…180
+  // Fold into −45…45 relative to the nearest horizontal or vertical.
+  tilt = ((((tilt + 45) % 90) + 90) % 90) - 45;
+  return clampAngle(angle - tilt);
+}

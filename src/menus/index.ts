@@ -34,6 +34,7 @@ export const allMenus: readonly MenuDefinition[] = [
       item("view.info.toggle"),
       item("view.filmstrip.toggle"),
       separator,
+      item("develop.cropTool.toggle", undefined, "Crop & Straighten"),
       item("view.set", { view: "grid" }, "Show in Grid"),
     ],
   },
