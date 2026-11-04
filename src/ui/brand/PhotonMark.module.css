@@ -1,0 +1,28 @@
+.mark {
+  flex: none;
+  overflow: visible;
+}
+
+.ring {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.core {
+  fill: var(--brand);
+}
+
+.photon {
+  fill: var(--brand-light);
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}

@@ -1,5 +1,7 @@
 import type { ViewMode } from "../../core/state/types";
 import { useAppState, useShortcut } from "../hooks";
+import { PhotonWordmark } from "../brand/PhotonMark";
+import { AccountMenu } from "./AccountMenu";
 import { ActionButton } from "./ActionButton";
 import { Icon, type IconName } from "./Icon";
 import { Kbd } from "./Kbd";
@@ -19,7 +21,7 @@ export function TopBar() {
   return (
     <header className={styles.bar}>
       <div className={styles.left}>
-        <span className={styles.brand}>Photo</span>
+        <PhotonWordmark size={18} className={styles.brand} />
         <ActionButton
           actionId="library.folder.open"
           className={styles.folderButton}
@@ -66,6 +68,7 @@ export function TopBar() {
         <ActionButton actionId="app.shortcuts.open" className={styles.icon}>
           <Icon name="keyboard" />
         </ActionButton>
+        <AccountMenu />
       </div>
     </header>
   );

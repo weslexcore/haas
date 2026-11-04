@@ -5,7 +5,8 @@ export default defineConfig({
   fullyParallel: true,
   use: { baseURL: "http://localhost:5199" },
   webServer: {
-    command: "yarn vite --port 5199 --strictPort",
+    // Sign-in is off so tests run without a Supabase project.
+    command: "VITE_AUTH=off yarn vite --port 5199 --strictPort",
     url: "http://localhost:5199",
     reuseExistingServer: !process.env.CI,
   },

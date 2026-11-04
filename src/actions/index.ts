@@ -1,5 +1,6 @@
 import type { AnyAction } from "../core/actions/types";
 import { ActionRegistry } from "../core/actions/registry";
+import { accountActions } from "./account";
 import { appActions } from "./app";
 import { developActions } from "./develop";
 import { historyActions } from "./history";
@@ -14,6 +15,7 @@ import { viewActions } from "./view";
 /** Every action in the app. Add new action modules here. */
 export const allActions: readonly AnyAction[] = [
   ...appActions,
+  ...accountActions,
   ...shortcutActions,
   ...viewActions,
   ...layoutActions,

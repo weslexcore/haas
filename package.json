@@ -12,11 +12,13 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "manifest": "tsx scripts/generate-manifest.ts",
-    "manifest:check": "tsx scripts/generate-manifest.ts --check",
+    "icons": "tsx scripts/render-icons.ts",
+    "manifest:check":"tsx scripts/generate-manifest.ts --check",
     "verify": "yarn typecheck && yarn test && yarn manifest:check"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
+    "@supabase/supabase-js": "2.119.0",
     "@tanstack/react-virtual": "^3.14.21",
     "dexie": "^4.4.6",
     "exifr": "^7.1.3",

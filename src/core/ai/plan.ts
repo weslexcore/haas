@@ -21,7 +21,7 @@ export interface ReviewedStep extends PlanStepInput {
 }
 
 /** Actions an AI plan may never contain (they manage the AI itself or are plumbing). */
-const FORBIDDEN_PREFIXES = ["app.ai.", "app.shortcuts.", "app.palette.", "app.contextMenu.", "history."];
+const FORBIDDEN_PREFIXES = ["app.ai.", "app.account.", "app.shortcuts.", "app.palette.", "app.contextMenu.", "history."];
 
 const PREVIEW_CATEGORIES = new Set(["Library", "Develop", "View", "Navigation"]);
 

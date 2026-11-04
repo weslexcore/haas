@@ -60,6 +60,8 @@ export function not(clause: WhenClause): WhenClause {
 
 export const hasActivePhoto = when("a photo is active", (ctx) => !!ctx.state.selection.activeId);
 
+export const signedIn = when("the user is signed in to a Photon account", (ctx) => ctx.state.account !== null);
+
 export const contextMenuOpen = when("a context menu is open", (ctx) => ctx.state.contextMenu !== null);
 
 export const needsPermission = when(

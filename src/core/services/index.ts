@@ -219,7 +219,16 @@ export interface ExportService {
   ): Promise<{ blob: Blob; width: number; height: number }>;
 }
 
+/** Passwordless accounts (Supabase Auth in the browser). Signing in happens before the runtime exists. */
+export interface AuthService {
+  /** Ends the session; the app then returns to the sign-in screen. */
+  signOut(): Promise<void>;
+  /** Register a passkey for this account on this device (runs the browser's WebAuthn prompt). */
+  addPasskey(): Promise<{ name: string | null }>;
+}
+
 export interface Services {
+  auth: AuthService;
   settings: SettingsStore;
   library: LibraryProvider;
   metadata: MetadataStore;

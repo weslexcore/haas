@@ -1,4 +1,4 @@
-# Photo: operating guide
+# Photon: operating guide
 
 > Generated from the action registry by `scripts/generate-manifest.ts`. Do not edit by hand.
 > The machine-readable version is `actions.json`.
@@ -136,6 +136,22 @@ Apply a warmer white balance and a little more exposure to every selected photo.
 ## Actions
 
 ### App
+
+#### Add a Passkey: `app.account.passkey.add`
+
+Command
+
+Register a passkey (Face ID, Touch ID, Windows Hello, a password manager or a security key) for the signed-in account, so the user can sign in on this device without an email link or text code.
+
+*Available only when the user is signed in to a Photon account.*
+
+#### Sign Out: `app.account.signOut`
+
+Command
+
+Sign out of the Photon account. Pending rating, flag and label changes are saved first; the app then returns to the sign-in screen. Photos and edits stay on this device.
+
+*Available only when the user is signed in to a Photon account.*
 
 #### List Actions: `app.actions.list`
 

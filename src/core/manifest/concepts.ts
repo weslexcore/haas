@@ -5,7 +5,7 @@
  */
 
 export const APP_INFO = {
-  name: "Photo",
+  name: "Photon",
   description:
     "A browser-based photo culling and editing app, in the spirit of Lightroom. Users open a folder of photos, " +
     "cull them (rate, flag, colour-label), make non-destructive edits, and export. Every operation is an action " +

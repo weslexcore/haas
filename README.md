@@ -1,4 +1,4 @@
-# Photo
+# Photon
 
 A browser-based photo culling and editing app, in the spirit of Lightroom. Everything is an action in a central registry. Buttons, keyboard shortcuts, the command palette, scripts and (soon) an AI all dispatch the same actions.
 
@@ -42,6 +42,31 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | `⌘Z` / `⇧⌘Z` | Undo, redo |
 | `T T` | Toggle light/dark theme (a chord) |
 | `⌘A` | Select all |
+
+## Accounts
+
+Photon asks people to sign in before the app loads, using [Supabase Auth](https://supabase.com/docs/guides/auth) with no passwords:
+
+- **Passkey**: Face ID, Touch ID, Windows Hello, a password manager or a security key. Photon offers to add one after the first email or phone sign-in, and from the account menu (top right) or the palette ("Add a Passkey").
+- **Email**: a magic link. Open it in the same browser it was requested from (PKCE flow).
+- **Phone**: a 6-digit code by text message. This needs an SMS provider (Twilio, MessageBird, Vonage or Textlocal) set up in Supabase.
+
+The first sign-in creates the account. Photos, edits and settings still stay on the device; the account only signs you in.
+
+**Setup.** Create `.env.local` (git-ignored) with the project's URL and publishable key (Dashboard → Project Settings → API):
+
+```bash
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+[`supabase/config.toml`](supabase/config.toml) holds the auth settings (redirect URLs, email template, passkeys, SMS). Use it with the local stack (`supabase start`, which catches emails at http://localhost:54324) or push it to the hosted project (`supabase link`, then `supabase config push`). Before going live:
+
+- set `site_url`, `additional_redirect_urls` and the `[auth.webauthn]` relying party to the production domain. Passkeys are bound to `rp_id`, so changing it later makes existing passkeys stop working;
+- enable `[auth.sms]` plus one SMS provider to turn on phone sign-in;
+- set up custom SMTP: Supabase's built-in email sender only allows a few emails an hour.
+
+Without a URL and key, the dev server skips sign-in (with a console warning) and a production build shows a "Sign-in isn't set up" screen. `VITE_AUTH=off` turns sign-in off; the e2e tests use it.
 
 ## RAW files
 

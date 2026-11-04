@@ -2,7 +2,7 @@
   "format": "photo-app-action-manifest",
   "version": 1,
   "app": {
-    "name": "Photo",
+    "name": "Photon",
     "description": "A browser-based photo culling and editing app, in the spirit of Lightroom. Users open a folder of photos, cull them (rate, flag, colour-label), make non-destructive edits, and export. Every operation is an action in a central registry; the keyboard, menus, command palette and AI all dispatch the same actions."
   },
   "conventions": [
@@ -381,6 +381,30 @@
     }
   ],
   "actions": [
+    {
+      "id": "app.account.passkey.add",
+      "title": "Add a Passkey",
+      "description": "Register a passkey (Face ID, Touch ID, Windows Hello, a password manager or a security key) for the signed-in account, so the user can sign in on this device without an email link or text code.",
+      "category": "App",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [],
+      "availability": "Available only when the user is signed in to a Photon account."
+    },
+    {
+      "id": "app.account.signOut",
+      "title": "Sign Out",
+      "description": "Sign out of the Photon account. Pending rating, flag and label changes are saved first; the app then returns to the sign-in screen. Photos and edits stay on this device.",
+      "category": "App",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [],
+      "availability": "Available only when the user is signed in to a Photon account."
+    },
     {
       "id": "app.actions.list",
       "title": "List Actions",

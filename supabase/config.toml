@@ -1,0 +1,77 @@
+# Supabase settings for Photon. Used by the local stack (`supabase start`) and
+# pushed to the hosted project with `supabase config push`. Only auth is
+# configured: Photon keeps photos and edits on the user's device.
+project_id = "photon"
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+# Local stack only: catches magic-link emails at http://localhost:54324.
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+# Where magic links return to. Production: set to the deployed origin before `supabase config push`.
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/", "http://127.0.0.1:5173/"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+# Accounts are created on first sign-in (magic link or phone code).
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.rate_limit]
+email_sent = 30
+sms_sent = 30
+sign_in_sign_ups = 30
+token_verifications = 30
+
+[auth.email]
+enable_signup = true
+# The magic link itself proves the address, so there's no separate confirmation email.
+enable_confirmations = false
+max_frequency = "60s"
+otp_length = 6
+otp_expiry = 3600
+
+[auth.email.template.magic_link]
+subject = "Your Photon sign-in link"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.sms]
+# Phone sign-in needs an SMS provider: turn this on together with one of the providers below.
+enable_signup = false
+enable_confirmations = false
+template = "Your Photon code is {{ .Code }}"
+max_frequency = "60s"
+
+[auth.sms.twilio]
+enabled = false
+account_sid = "env(SUPABASE_AUTH_SMS_TWILIO_ACCOUNT_SID)"
+message_service_sid = "env(SUPABASE_AUTH_SMS_TWILIO_MESSAGE_SERVICE_SID)"
+auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+
+# Local stack only: a test number whose code is fixed, so no SMS is sent.
+[auth.sms.test_otp]
+15555550100 = "123456"
+
+[auth.passkey]
+enabled = true
+
+# Passkeys are bound to the relying party ID. Set the production domain before
+# anyone registers a passkey, and don't change it afterwards.
+[auth.webauthn]
+rp_display_name = "Photon"
+rp_id = "localhost"
+rp_origins = ["http://localhost:5173"]

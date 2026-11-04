@@ -21,6 +21,7 @@ async function runtimeWithAi(respond?: ConstructorParameters<typeof StubAIProvid
     menus: allMenus,
     platform: { isMac: false, prefersDark: () => false },
     services: {
+      auth: { signOut: async () => undefined, addPasskey: async () => ({ name: null }) },
       settings: new MemorySettingsStore(),
       library,
       metadata: new MemoryMetadataStore(),

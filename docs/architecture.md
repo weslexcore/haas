@@ -1,6 +1,6 @@
 # Architecture
 
-Photo is a client-side photo culling and editing app. Everything the user (or an AI, or a script) can do is an **action** in one registry. There is one way to change state: dispatch an action.
+Photon is a client-side photo culling and editing app. Everything the user (or an AI, or a script) can do is an **action** in one registry. There is one way to change state: dispatch an action.
 
 ```
  keyboard ─┐
@@ -110,7 +110,20 @@ palette "?" ─► app.ai.ask ─► AIProvider (Anthropic, from the browser wit
 - **Conversation** (`core/ai/thread.ts`, `state.ai.thread`). Every message, suggestion and error is a turn, saved per folder in local storage (`ui/ai/thread-sync.ts`). Earlier exchanges are replayed verbatim (`sent` / `reply`) with a cache breakpoint on the last one. Each new message carries fresh `<app_context>` and a `<suggestion_status>` block: for every earlier suggestion, whether it was applied, which steps, whether params were edited, or whether it was left unapplied or dismissed. Applying marks the suggestion inside the same transaction (`app.ai.suggestion.mark`), so undo reverts the edits and the status together. Any unapplied suggestion can be reviewed and applied later. The panel opens and closes with ⌘J (`app.ai.panel.toggle`).
 - **Preview** (`core/ai/plan-runner.ts`). Snapshots the state, runs the previewable steps with history recording suspended, and sets `ai.previewing`. `MetadataSync` ignores previews, and a dispatch guard refuses other edits until the preview ends. Ending restores the snapshot exactly.
 
-**Services** (`core/services`). `SettingsStore`, `LibraryProvider`/`PhotoSource`, `MetadataStore`, `PreviewService`, `ExportService`, `VisionService`, `AIProvider` and `DownloadService` are interfaces, with browser implementations in `src/adapters` (and in-memory ones for tests). A server backend can replace any of them without touching actions.
+## Accounts
+
+```
+main.tsx ─► AuthGate ── signed out ─► SignInScreen: passkey | email magic link | phone code
+               │                                   (SupabaseAuth, adapters/auth/supabase-auth.ts)
+               └─ signed in ─► createBrowserRuntime({ auth, account }) ─► App
+```
+
+- **Gate** (`ui/auth/AuthGate.tsx`). The runtime (folder restore, previews, AI) is created only after sign-in, once per page. `state.account` holds the account (`null` when sign-in is off), and the `signedIn` clause reads it. After an email-link or phone sign-in, a passkey is offered once per account on that device. A sign-out, from this tab or another one, or a session that can no longer be refreshed, reloads the page and shows the sign-in screen.
+- **Supabase** (`adapters/auth/supabase-auth.ts`). The PKCE flow, so a magic link only works in the browser that requested it. The session is kept in localStorage under `photon:auth`. `init()` completes a magic link from `?code=` and removes Supabase's parameters from the URL before URL state is read. Errors become plain-language messages.
+- **Actions.** `app.account.signOut` (saves pending metadata first) and `app.account.passkey.add` go through the `AuthService` interface. AI plans can't use them (`app.account.` is a forbidden prefix).
+- **Configuration.** `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`; `VITE_AUTH=off` turns sign-in off (Playwright sets it). Server-side auth settings are in `supabase/config.toml`.
+
+**Services** (`core/services`). `AuthService`, `SettingsStore`, `LibraryProvider`/`PhotoSource`, `MetadataStore`, `PreviewService`, `ExportService`, `VisionService`, `AIProvider` and `DownloadService` are interfaces, with browser implementations in `src/adapters` (and in-memory ones for tests). A server backend can replace any of them without touching actions.
 
 **Runtime** (`core/runtime.ts`). `createRuntime()` wires everything together. The browser calls it from `ui/bootstrap.ts`, and tests call it from `tests/unit/helpers.ts`. In the browser, `window.photo.dispatch(...)` exposes the same dispatcher for scripting and end-to-end tests.
 
@@ -123,5 +136,7 @@ palette "?" ─► app.ai.ask ─► AIProvider (Anthropic, from the browser wit
 `state.layout` (`core/state/layout.ts`) holds where the Develop panel sits (docked left or right, or floating with a position and size) and how wide it and the filmstrip are. It changes only through the `view.panel.*` and `view.filmstrip.resize` actions (`actions/layout.ts`), which clamp values and save the whole slice to local settings; `view.layout.restore` applies it at startup. F7 docks/undocks the panel and Shift+F7 swaps its side; F6 (`view.filmstrip.toggle`) hides the strip, which leaves a slim bar with a button to bring it back. None of it is undoable. In the UI, `ui/layout/ResizeHandle` is a keyboard-accessible `separator` driven by the pointer-capture `useDrag` hook, and `ui/layout/DockablePanel` wraps the Develop panel: dragging its header past a few pixels undocks it (`view.panel.undock` at the pointer), later moves are `view.panel.float.set`, and releasing within 32px of a window edge docks it there (`view.panel.dock`). Floating position is clamped to the viewport in CSS, so a smaller window never hides the header.
 
 ## Theming
+
+The brand colours are `--brand`, `--brand-light` and `--brand-glow`. The Photon mark (`ui/brand/PhotonMark.tsx`) is a lens ring with a particle of light leaving it; `public/icon.svg` draws the same paths, and `yarn icons` renders the PNG app icons from it.
 
 `ui/styles/tokens.css` defines semantic tokens (`--surface-panel`, `--accent`, `--text-muted`, …) with one block per theme, selected by `data-theme` on `<html>`. Components use CSS Modules and only reference tokens. A new theme is a new block, and runtime themes can set the variables directly.

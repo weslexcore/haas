@@ -106,7 +106,16 @@ export interface DevelopState {
   profiles: Profile[];
 }
 
+/** The signed-in Photon account. */
+export interface Account {
+  id: string;
+  email: string | null;
+  phone: string | null;
+}
+
 export interface AppState {
+  /** Null when sign-in is turned off (tests, or a dev server without Supabase settings). */
+  account: Account | null;
   view: ViewMode;
   theme: ThemePreference;
   beforeAfter: boolean;
@@ -152,6 +161,7 @@ export const defaultFilter: LibraryFilter = { minRating: 0, flags: [], colorLabe
 export const defaultSort: LibrarySort = { key: "capturedAt", direction: "asc" };
 
 export const initialState: AppState = {
+  account: null,
   view: "grid",
   theme: "system",
   beforeAfter: false,
