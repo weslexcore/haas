@@ -1,0 +1,119 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: var(--space-1) 6px;
+  background: var(--surface-panel);
+  border-top: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bar::-webkit-scrollbar {
+  display: none;
+}
+
+.group {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  gap: 1px;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+/* Centred when it fits; scrolls from the left edge when it doesn't (safe centring). */
+.group:first-child {
+  margin-left: auto;
+}
+
+.advance {
+  margin-right: auto;
+}
+
+.button {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 32px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button:disabled {
+  opacity: 0.35;
+}
+
+.star {
+  min-width: 24px;
+  font-size: 21px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.starOn {
+  color: var(--star);
+}
+
+.pick[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--flag-pick);
+}
+
+.reject[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--flag-reject);
+}
+
+.swatchButton {
+  min-width: 24px;
+}
+
+.swatch {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+}
+
+.swatchButton[aria-pressed="true"] .swatch {
+  box-shadow: 0 0 0 2px var(--surface-sunken), 0 0 0 4px var(--accent);
+}
+
+.advance {
+  min-width: 36px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.advance[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Narrow phones: stars a touch tighter so the row doesn't scroll. */
+@media (max-width: 380px) {
+  .bar {
+    gap: var(--space-1);
+  }
+
+  .star {
+    min-width: 22px;
+    font-size: 19px;
+  }
+
+  .swatchButton {
+    min-width: 22px;
+  }
+
+  .pick,
+  .reject {
+    min-width: 30px;
+  }
+}

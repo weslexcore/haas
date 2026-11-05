@@ -194,3 +194,29 @@
 .run:hover {
   background: var(--accent-hover);
 }
+
+/* Small screens: the palette fills the width and leaves room for the keyboard. */
+/* Small-screen layout (set by App on <html>). */
+:global(html[data-layout="mobile"]) .results {
+  max-height: calc(100dvh - 180px);
+}
+
+:global(html[data-layout="mobile"]) .row {
+  min-height: 44px;
+}
+
+:global(html[data-layout="mobile"]) .choice {
+  min-height: 40px;
+}
+
+:global(html[data-layout="mobile"]) .run,
+:global(html[data-layout="mobile"]) .back {
+  min-height: 40px;
+}
+
+/* The footer only lists keys. */
+@media (hover: none) and (pointer: coarse) {
+  .footer {
+    display: none;
+  }
+}

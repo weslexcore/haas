@@ -374,3 +374,46 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Fingers: taller sliders with a bigger thumb, and roomier buttons. */
+@media (hover: none) and (pointer: coarse) {
+  .range {
+    height: 32px;
+  }
+
+  .range::-webkit-slider-runnable-track {
+    height: 4px;
+  }
+
+  .range::-moz-range-track {
+    height: 4px;
+  }
+
+  .range::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    margin-top: -9px;
+  }
+
+  .range::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tool,
+  .footerButton,
+  .aspect,
+  .tab,
+  .reset,
+  .sectionToggle {
+    min-height: 36px;
+  }
+
+  .aspect {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .curvePoint {
+    r: 8;
+  }
+}

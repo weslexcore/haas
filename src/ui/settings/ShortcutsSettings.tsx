@@ -75,6 +75,8 @@ function ShortcutsDialog() {
       onEscape={() => (recording ? setRecording(null) : void dispatch("app.shortcuts.close"))}
       className={styles.dialog}
     >
+      {/* Key caps are hidden on touch devices everywhere else; this screen is about them. */}
+      <div data-keyboard-hints="on" className={styles.inner}>
       <header className={styles.header}>
         <h2 className={styles.title}>Keyboard Shortcuts</h2>
         <input
@@ -181,6 +183,7 @@ function ShortcutsDialog() {
           );
         })}
         {actions.length === 0 && <p className={styles.empty}>No actions match “{query}”.</p>}
+      </div>
       </div>
     </Modal>
   );

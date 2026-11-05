@@ -4,6 +4,7 @@ import { LAYOUT_LIMITS } from "../../core/state/layout";
 import { selectVisibleIds } from "../../core/state/selectors";
 import type { PhotoRecord } from "../../core/state/types";
 import { useAppState, useDispatch, useShortcut } from "../hooks";
+import { useLongPress, type Point } from "../hooks/gestures";
 import { ResizeHandle } from "../layout/ResizeHandle";
 import { Icon } from "../shell/Icon";
 import { usePhotoInteractions } from "./photo-interactions";
@@ -22,7 +23,7 @@ export function Filmstrip() {
   const height = useAppState((s) => s.layout.filmstripHeight);
   const dispatch = useDispatch();
   const selected = new Set(ids);
-  const { select, openMenu } = usePhotoInteractions("grid.photo");
+  const { select, openMenu, openMenuAt } = usePhotoInteractions("grid.photo");
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemWidth = Math.round(height * ITEM_ASPECT);
 
@@ -69,6 +70,7 @@ export function Filmstrip() {
                   active={id === activeId}
                   onSelect={select}
                   onMenu={openMenu}
+                  onMenuAt={openMenuAt}
                 />
               );
             })}
@@ -114,9 +116,11 @@ interface ItemProps {
   active: boolean;
   onSelect: (e: MouseEvent, id: string) => void;
   onMenu: (e: MouseEvent, id: string) => void;
+  onMenuAt: (id: string, at: Point) => void;
 }
 
-const FilmstripItem = memo(function FilmstripItem({ photo, start, width, selected, active, onSelect, onMenu }: ItemProps) {
+const FilmstripItem = memo(function FilmstripItem({ photo, start, width, selected, active, onSelect, onMenu, onMenuAt }: ItemProps) {
+  const press = useLongPress((at) => onMenuAt(photo.id, at));
   return (
     <div role="listitem" className={styles.item} style={{ transform: `translateX(${start}px)`, width }}>
       <button
@@ -126,8 +130,12 @@ const FilmstripItem = memo(function FilmstripItem({ photo, start, width, selecte
         aria-label={photo.fileName}
         aria-pressed={selected}
         aria-current={active ? "true" : undefined}
+        {...press}
         onClick={(e) => onSelect(e, photo.id)}
-        onContextMenu={(e) => onMenu(e, photo.id)}
+        onContextMenu={(e) => {
+          press.onContextMenu(e);
+          onMenu(e, photo.id);
+        }}
       >
         <Thumb photo={photo} className={`${styles.thumb} ${photo.flag === "reject" ? styles.rejected : ""}`} />
         <span className={styles.marks}>

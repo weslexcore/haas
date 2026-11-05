@@ -35,3 +35,17 @@
   font-size: var(--text-lg);
   line-height: 1;
 }
+
+/* Small screens: toasts span the width above the bottom bar. */
+/* Small-screen layout (set by App on <html>). */
+:global(html[data-layout="mobile"]) .stack {
+  right: var(--space-2);
+  left: var(--space-2);
+  bottom: calc(112px + env(safe-area-inset-bottom));
+  max-width: none;
+}
+
+:global(html[data-layout="mobile"]) .close {
+  min-width: 36px;
+  min-height: 36px;
+}

@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { MenuItem } from "../../core/menus/registry";
 import { useAppState, useBindingsVersion } from "../hooks";
+import { useMobileLayout } from "../hooks/media";
 import { useRuntime } from "../runtime-context";
+import { Icon } from "../shell/Icon";
 import { Kbd } from "../shell/Kbd";
 import { toast } from "../toasts";
 import styles from "./ContextMenu.module.css";
@@ -15,7 +17,12 @@ interface Anchor {
   flipX?: number;
 }
 
-/** Renders the open context menu (AppState.contextMenu). Menu content is data from the menu registry. */
+/**
+ * Renders the open context menu (AppState.contextMenu). Menu content is data
+ * from the menu registry. On small screens it is a sheet along the bottom
+ * edge and submenus drill in, with a Back row; elsewhere it opens at the
+ * pointer.
+ */
 export function ContextMenu() {
   const menuState = useAppState((s) => s.contextMenu);
   const runtime = useRuntime();
@@ -27,6 +34,7 @@ export function ContextMenu() {
 function MenuRoot({ items, label, x, y }: { items: MenuItem[]; label: string; x: number | null; y: number | null }) {
   const runtime = useRuntime();
   const rootRef = useRef<HTMLDivElement>(null);
+  const sheet = useMobileLayout();
 
   const anchor: Anchor = (() => {
     if (x !== null && y !== null) return { x, y };
@@ -66,9 +74,12 @@ function MenuRoot({ items, label, x, y }: { items: MenuItem[]; label: string; x:
   }, []);
 
   return (
-    <div ref={rootRef}>
-      <MenuList items={items} label={label} anchor={anchor} level={0} onActivate={activate} onCloseAll={close} onCloseLevel={close} />
-    </div>
+    <>
+      {sheet && <div className={styles.scrim} aria-hidden="true" />}
+      <div ref={rootRef}>
+        <MenuList items={items} label={label} anchor={anchor} level={0} sheet={sheet} onActivate={activate} onCloseAll={close} onCloseLevel={close} />
+      </div>
+    </>
   );
 }
 
@@ -77,6 +88,8 @@ interface MenuListProps {
   label: string;
   anchor: Anchor;
   level: number;
+  /** Bottom sheet (small screens) instead of a popup at the anchor. */
+  sheet: boolean;
   onActivate: (item: ActionItem) => void;
   onCloseAll: () => void;
   onCloseLevel: () => void;
@@ -84,7 +97,7 @@ interface MenuListProps {
   autoFocus?: boolean;
 }
 
-function MenuList({ items, label, anchor, level, onActivate, onCloseAll, onCloseLevel, autoFocus = true }: MenuListProps) {
+function MenuList({ items, label, anchor, level, sheet, onActivate, onCloseAll, onCloseLevel, autoFocus = true }: MenuListProps) {
   const { registry, keybindings, dispatcher } = useRuntime();
   useAppState((s) => s); // re-render when availability may change
   useBindingsVersion();
@@ -106,13 +119,13 @@ function MenuList({ items, label, anchor, level, onActivate, onCloseAll, onClose
   // Keep the menu on screen; submenus flip to the left of their parent when needed.
   useLayoutEffect(() => {
     const el = listRef.current;
-    if (!el) return;
+    if (!el || sheet) return;
     const { width, height } = el.getBoundingClientRect();
     let left = anchor.x;
     if (left + width > innerWidth - 4) left = anchor.flipX !== undefined ? anchor.flipX - width : innerWidth - width - 4;
     const top = Math.min(anchor.y, innerHeight - height - 4);
     setPos({ left: Math.max(4, left), top: Math.max(4, top) });
-  }, [anchor.x, anchor.y, anchor.flipX]);
+  }, [anchor.x, anchor.y, anchor.flipX, sheet]);
 
   useEffect(() => {
     if (autoFocus) setFocus(focusable.indexOf(true));
@@ -218,6 +231,9 @@ function MenuList({ items, label, anchor, level, onActivate, onCloseAll, onClose
     return b ? keybindings.formatStrokes(b.keys) : null;
   };
 
+  // In a sheet the open submenu takes the parent's place (drill in), so the parent is hidden meanwhile.
+  const hidden = sheet && openSub !== null;
+
   return (
     <>
       <div
@@ -226,11 +242,27 @@ function MenuList({ items, label, anchor, level, onActivate, onCloseAll, onClose
         aria-label={label}
         aria-orientation="vertical"
         tabIndex={-1}
-        className={styles.menu}
-        style={{ left: pos.left, top: pos.top }}
+        className={`${styles.menu} ${sheet ? styles.sheet : ""} ${hidden ? styles.hidden : ""}`}
+        style={sheet ? undefined : { left: pos.left, top: pos.top }}
         onKeyDown={onKeyDown}
         onContextMenu={(e) => e.preventDefault()}
       >
+        {sheet && (
+          <div className={styles.sheetHeader}>
+            {level > 0 ? (
+              <button type="button" className={styles.back} onClick={onCloseLevel}>
+                <Icon name="chevronDown" size={16} />
+                <span>Back</span>
+              </button>
+            ) : (
+              <span className={styles.sheetTitle}>{label}</span>
+            )}
+            {level > 0 && <span className={styles.sheetTitle}>{label}</span>}
+            <button type="button" className={styles.closeSheet} aria-label="Close menu" onClick={onCloseAll}>
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        )}
         {items.map((item, i) => {
           if (item.kind === "separator") return <div key={i} role="separator" className={styles.separator} />;
           const disabled = !focusable[i];
@@ -253,6 +285,7 @@ function MenuList({ items, label, anchor, level, onActivate, onCloseAll, onClose
               aria-expanded={isSub ? openSub?.index === i : undefined}
               className={`${styles.item} ${focus === i ? styles.focused : ""}`}
               onMouseEnter={() => {
+                if (sheet) return; // taps, not hovers: nothing opens or closes on its own
                 setFocus(disabled ? -1 : i);
                 clearTimeout(hoverTimer.current);
                 if (isSub && !disabled) hoverTimer.current = setTimeout(() => openSubmenu(i, false), 120);
@@ -274,6 +307,7 @@ function MenuList({ items, label, anchor, level, onActivate, onCloseAll, onClose
           label={itemLabel(items[openSub.index]!)}
           anchor={openSub.anchor}
           level={level + 1}
+          sheet={sheet}
           autoFocus={openSub.viaKeyboard}
           onActivate={onActivate}
           onCloseAll={onCloseAll}

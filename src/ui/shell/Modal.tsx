@@ -6,13 +6,15 @@ interface ModalProps {
   onEscape: () => void;
   onBackdropClick?: () => void;
   className?: string;
+  /** "top": a centred dialog near the top (default). "bottom": a sheet that slides up from the bottom edge, for small screens. */
+  placement?: "top" | "bottom";
   children: ReactNode;
 }
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** Accessible dialog shell: traps focus, handles Escape, restores focus on close. */
-export function Modal({ label, onEscape, onBackdropClick, className, children }: ModalProps) {
+export function Modal({ label, onEscape, onBackdropClick, className, placement = "top", children }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null);
   const onEscapeRef = useRef(onEscape);
   onEscapeRef.current = onEscape;
@@ -65,15 +67,16 @@ export function Modal({ label, onEscape, onBackdropClick, className, children }:
     }
   }
 
+  const sheet = placement === "bottom";
   return (
-    <div className={styles.scrim} onMouseDown={(e) => e.target === e.currentTarget && onBackdropClick?.()}>
+    <div className={`${styles.scrim} ${sheet ? styles.sheetScrim : ""}`} onMouseDown={(e) => e.target === e.currentTarget && onBackdropClick?.()}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        className={`${styles.dialog} ${className ?? ""}`}
+        className={`${styles.dialog} ${sheet ? styles.sheet : ""} ${className ?? ""}`}
         onKeyDown={onKeyDown}
       >
         {children}

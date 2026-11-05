@@ -21,8 +21,38 @@
   overflow: hidden;
 }
 
+/* A sheet rises from the bottom edge and spans the width: for small screens. */
+.sheetScrim {
+  align-items: flex-end;
+  padding: var(--space-6) 0 0;
+}
+
+.sheet {
+  width: 100%;
+  max-height: calc(100dvh - var(--space-6));
+  padding-bottom: env(safe-area-inset-bottom);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  animation: rise var(--duration-med) ease-out;
+}
+
+/* Dialogs take the whole width on narrow screens; the keyboard eats the rest. */
+/* Small-screen layout (set by App on <html>). */
+:global(html[data-layout="mobile"]) .scrim {
+  padding: var(--space-2);
+}
+
+:global(html[data-layout="mobile"]) .sheetScrim {
+  padding: var(--space-6) 0 0;
+}
+
 @keyframes fade {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(24px);
   }
 }

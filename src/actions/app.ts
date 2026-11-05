@@ -151,10 +151,10 @@ export const openContextMenu = defineAction({
   title: "Open Context Menu",
   description:
     "Open a context menu. Without menuId, opens the photo menu for the current view next to the active " +
-    "photo (the keyboard equivalent of right-clicking it). x/y place it at a viewport position.",
+    "photo (the keyboard equivalent of right-clicking it); that needs photos in the library. x/y place it at a " +
+    "viewport position; on small screens menus open as a sheet at the bottom instead.",
   category: "App",
   kind: "command",
-  when: hasPhotos,
   params: z
     .object({
       menuId: z.string().optional().describe("Menu to open; defaults to the current view's photo menu."),
@@ -170,6 +170,7 @@ export const openContextMenu = defineAction({
   run(params, ctx) {
     const menuId = params?.menuId ?? (ctx.state.view === "grid" ? "grid.photo" : "loupe.photo");
     if (!ctx.menus.get(menuId)) throw new Error(`No menu with id "${menuId}".`);
+    if (menuId.endsWith(".photo") && !hasPhotos.test(ctx)) throw new Error("There are no photos to act on.");
     ctx.update((s) => {
       s.contextMenu = { menuId, x: params?.x ?? null, y: params?.y ?? null };
       s.palette = { open: false, actionId: null };

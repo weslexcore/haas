@@ -1,6 +1,7 @@
 import type { ViewMode } from "../../core/state/types";
 import { useAppState, useShortcut } from "../hooks";
-import { PhotonWordmark } from "../brand/PhotonMark";
+import { useMobileLayout } from "../hooks/media";
+import { PhotonMark, PhotonWordmark } from "../brand/PhotonMark";
 import { AccountMenu } from "./AccountMenu";
 import { ActionButton } from "./ActionButton";
 import { Icon, type IconName } from "./Icon";
@@ -17,6 +18,30 @@ export function TopBar() {
   const current = useAppState((s) => s.view);
   const folder = useAppState((s) => s.library.folder);
   const paletteShortcut = useShortcut("app.palette.open");
+  const mobile = useMobileLayout();
+
+  // Small screens: the mark, the folder, search and a "⋯" menu with the rest. Views move to the bottom bar.
+  if (mobile) {
+    return (
+      <header className={`${styles.bar} ${styles.compact}`}>
+        <PhotonMark size={22} className={styles.brand} />
+        <ActionButton
+          actionId="library.folder.open"
+          className={`${styles.folderButton} ${styles.compactFolder}`}
+          label={folder ? `Open Folder… (currently “${folder.name}”)` : undefined}
+        >
+          <Icon name="folder" />
+          <span className={styles.folderName}>{folder ? folder.name : "Open Folder…"}</span>
+        </ActionButton>
+        <ActionButton actionId="app.palette.open" label="Search actions" className={styles.icon}>
+          <Icon name="search" size={18} />
+        </ActionButton>
+        <ActionButton actionId="app.contextMenu.open" params={{ menuId: "app.more" }} label="More" className={styles.icon}>
+          <Icon name="more" size={18} />
+        </ActionButton>
+      </header>
+    );
+  }
 
   return (
     <header className={styles.bar}>

@@ -12,5 +12,9 @@ export default defineConfig({
   },
   // No device preset: presets spoof the user agent (e.g. Windows), which would make the app's
   // `mod` key disagree with Playwright's host-based ControlOrMeta.
-  projects: [{ name: "chromium", use: { browserName: "chromium", viewport: { width: 1280, height: 800 } } }],
+  projects: [
+    { name: "chromium", testIgnore: /mobile\.spec\.ts/, use: { browserName: "chromium", viewport: { width: 1280, height: 800 } } },
+    // A phone: narrow, touch only (hover: none, pointer: coarse), no keyboard.
+    { name: "mobile", testMatch: /mobile\.spec\.ts/, use: { browserName: "chromium", viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true } },
+  ],
 });

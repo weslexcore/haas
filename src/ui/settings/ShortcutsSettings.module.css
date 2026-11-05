@@ -244,3 +244,36 @@
   padding: var(--space-5) 0;
   text-align: center;
 }
+
+.inner {
+  display: contents;
+}
+
+/* Small screens: the header wraps, and bindings sit under their action. */
+/* Small-screen layout (set by App on <html>). */
+:global(html[data-layout="mobile"]) .header {
+  flex-wrap: wrap;
+  padding: var(--space-3);
+}
+
+:global(html[data-layout="mobile"]) .search {
+  order: 1;
+  flex-basis: 100%;
+}
+
+:global(html[data-layout="mobile"]) .row {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+:global(html[data-layout="mobile"]) .bindings {
+  max-width: none;
+  justify-content: flex-start;
+  flex-basis: 100%;
+}
+
+:global(html[data-layout="mobile"]) .button,
+:global(html[data-layout="mobile"]) .chipMain,
+:global(html[data-layout="mobile"]) .add {
+  min-height: 36px;
+}

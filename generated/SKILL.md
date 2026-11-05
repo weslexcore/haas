@@ -240,9 +240,9 @@ Close the open context menu without running anything.
 
 Command · Shortcuts: `shift+f10`, `contextmenu`
 
-Open a context menu. Without menuId, opens the photo menu for the current view next to the active photo (the keyboard equivalent of right-clicking it). x/y place it at a viewport position.
+Open a context menu. Without menuId, opens the photo menu for the current view next to the active photo (the keyboard equivalent of right-clicking it); that needs photos in the library. x/y place it at a viewport position; on small screens menus open as a sheet at the bottom instead.
 
-*Available only when the library contains photos.*
+*Always available.*
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -1497,3 +1497,19 @@ Right-click on the photo in Loupe or Develop.
 - Toggle Filmstrip: `view.filmstrip.toggle`
 - Crop & Straighten: `develop.cropTool.toggle`
 - Show in Grid: `view.set` `{"view":"grid"}`
+
+### More: `app.more`
+
+The “⋯” button at the top right on small screens: the tools that have no room in the top bar there.
+
+- AI Conversation: `app.ai.panel.toggle`
+- Toggle Command Palette: `app.palette.open`
+- Undo: `history.undo`
+- Redo: `history.redo`
+- Toggle Info Overlay: `view.info.toggle`
+- Toggle Filmstrip: `view.filmstrip.toggle`
+- Toggle Light/Dark Theme: `app.theme.toggle`
+- Keyboard Shortcuts: `app.shortcuts.open`
+- AI Settings…: `app.ai.settings.open`
+- Add a Passkey: `app.account.passkey.add`
+- Sign Out: `app.account.signOut`
