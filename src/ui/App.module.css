@@ -1,6 +1,7 @@
+/* Rows: top bar, the view, then (on touch devices) the rating bar and (on small screens) the bottom bar, or the status bar. */
 .app {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   height: 100%;
 }
 

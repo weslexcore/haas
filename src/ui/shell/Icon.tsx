@@ -16,6 +16,13 @@ const PATHS = {
   float: "M8 4h12v12M4 8h12v12H4z",
   chevronDown: "m6 9 6 6 6-6",
   chevronUp: "m6 15 6-6 6 6",
+  more: "M5 12h.01M12 12h.01M19 12h.01",
+  filter: "M4 6h16M7 12h10M10 18h4",
+  photo: "M4 6h16v12H4zM8 15l3-3 2 2 3-4 2 5",
+  star: "m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
+  flag: "M5 21V4h11l-1.5 3.5L16 11H5",
+  reject: "M6 6l12 12M18 6 6 18",
+  advance: "M4 12h12m0 0-4-4m4 4-4 4M20 6v12",
 } as const;
 
 export type IconName = keyof typeof PATHS;

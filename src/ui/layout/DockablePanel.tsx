@@ -11,12 +11,24 @@ const DOCK_EDGE = 32;
 const TEAR_OFF = 8;
 const HEADER_HEIGHT = 32;
 
+interface DockablePanelProps {
+  title: string;
+  children: ReactNode;
+  /**
+   * Small screens: the panel stays where the view puts it (a sheet under the photo, or beside it
+   * on a phone held sideways). It neither floats nor changes side; the remembered layout is left
+   * alone for bigger windows. With onCollapse, the header has a button that hides it.
+   */
+  fixed?: boolean;
+  onCollapse?: () => void;
+}
+
 /**
  * A panel that docks to the left or right of the window or floats over it.
  * Drag the header to tear it off and move it; drop it against a window edge
  * to dock it there. The header buttons do the same without dragging.
  */
-export function DockablePanel({ title, children }: { title: string; children: ReactNode }) {
+export function DockablePanel({ title, children, fixed = false, onCollapse }: DockablePanelProps) {
   const layout = useAppState((s) => s.layout);
   const dispatch = useDispatch();
   const frameRef = useRef<HTMLDivElement>(null);
@@ -65,6 +77,18 @@ export function DockablePanel({ title, children }: { title: string; children: Re
     },
     onMove: (s) => void dispatch("view.panel.float.set", { width: gesture.current.width + s.dx, height: gesture.current.height + s.dy }),
   });
+
+  if (fixed) {
+    return (
+      <div ref={frameRef} className={`${styles.frame} ${styles.docked}`} data-panel-state="fixed">
+        <div className={`${styles.header} ${styles.staticHeader}`}>
+          <span className={styles.title}>{title}</span>
+          {onCollapse && <HeaderButton label="Hide panel" icon="chevronDown" onClick={onCollapse} />}
+        </div>
+        <div className={styles.body}>{children}</div>
+      </div>
+    );
+  }
 
   const { panelDocked: docked, panelSide: side, panelFloat: rect } = layout;
   const floatStyle: CSSProperties | undefined = docked
@@ -129,7 +153,7 @@ export function DockablePanel({ title, children }: { title: string; children: Re
   );
 }
 
-function HeaderButton({ label, icon, onClick }: { label: string; icon: "panelLeft" | "panelRight" | "float"; onClick: () => void }) {
+function HeaderButton({ label, icon, onClick }: { label: string; icon: "panelLeft" | "panelRight" | "float" | "chevronDown"; onClick: () => void }) {
   return (
     <button type="button" className={styles.button} aria-label={label} title={label} onClick={onClick}>
       <Icon name={icon} size={14} />

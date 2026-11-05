@@ -90,3 +90,29 @@
   display: flex;
   background: var(--surface-sunken);
 }
+
+/* No text selection or image callout on a long press: it opens the photo menu. */
+.stage,
+.editedStage {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Small-screen layout (set by App on <html>). */
+:global(html[data-layout="mobile"]) .stage {
+  padding: var(--space-2);
+}
+
+:global(html[data-layout="mobile"]) .image {
+  inset: var(--space-2);
+  width: calc(100% - 2 * var(--space-2));
+  height: calc(100% - 2 * var(--space-2));
+}
+
+:global(html[data-layout="mobile"]) .info {
+  top: var(--space-2);
+  right: var(--space-2);
+  left: var(--space-2);
+  max-width: none;
+}

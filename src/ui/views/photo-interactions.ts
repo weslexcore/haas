@@ -1,11 +1,13 @@
 import { useCallback, type MouseEvent } from "react";
 import { selectVisibleIds } from "../../core/state/selectors";
+import type { Point } from "../hooks/gestures";
 import { useRuntime } from "../runtime-context";
 import { toast } from "../toasts";
 
 /**
- * Click and right-click handling shared by the grid and filmstrip. Turning
- * mouse input into a selection is UI work; every change is an action.
+ * Click, right-click and long-press handling shared by the grid and
+ * filmstrip. Turning pointer input into a selection is UI work; every change
+ * is an action.
  */
 export function usePhotoInteractions(menuId: string) {
   const runtime = useRuntime();
@@ -40,17 +42,26 @@ export function usePhotoInteractions(menuId: string) {
     [runtime, dispatch],
   );
 
-  const openMenu = useCallback(
-    async (e: MouseEvent, id: string) => {
-      e.preventDefault();
-      // Like Lightroom: right-clicking outside the selection selects that photo first.
+  /** Opens the photo menu at a point: a right-click, or a long press on touch screens. */
+  const openMenuAt = useCallback(
+    async (id: string, at: Point) => {
+      // Like Lightroom: opening the menu outside the selection selects that photo first.
       if (!runtime.store.getState().selection.ids.includes(id)) {
         if (!(await dispatch("library.selection.set", { ids: [id] }))) return;
       }
-      void dispatch("app.contextMenu.open", { menuId, x: e.clientX, y: e.clientY });
+      void dispatch("app.contextMenu.open", { menuId, x: at.x, y: at.y });
     },
     [runtime, dispatch, menuId],
   );
 
-  return { select, openMenu, dispatch };
+  const openMenu = useCallback(
+    (e: MouseEvent, id: string) => {
+      if (e.defaultPrevented) return; // a long press already opened it
+      e.preventDefault();
+      void openMenuAt(id, { x: e.clientX, y: e.clientY });
+    },
+    [openMenuAt],
+  );
+
+  return { select, openMenu, openMenuAt, dispatch };
 }

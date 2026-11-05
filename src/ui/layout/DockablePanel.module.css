@@ -35,6 +35,12 @@ body[data-dragging="grabbing"] .header {
   cursor: grabbing;
 }
 
+/* Fixed in place on small screens: nothing to drag. */
+.staticHeader {
+  cursor: default;
+  touch-action: auto;
+}
+
 .grip {
   display: inline-flex;
   color: var(--text-muted);
@@ -65,6 +71,13 @@ body[data-dragging="grabbing"] .header {
 .button:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .button {
+    width: 36px;
+    height: 28px;
+  }
 }
 
 .body {

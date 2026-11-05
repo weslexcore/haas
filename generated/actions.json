@@ -569,7 +569,7 @@
     {
       "id": "app.contextMenu.open",
       "title": "Open Context Menu",
-      "description": "Open a context menu. Without menuId, opens the photo menu for the current view next to the active photo (the keyboard equivalent of right-clicking it). x/y place it at a viewport position.",
+      "description": "Open a context menu. Without menuId, opens the photo menu for the current view next to the active photo (the keyboard equivalent of right-clicking it); that needs photos in the library. x/y place it at a viewport position; on small screens menus open as a sheet at the bottom instead.",
       "category": "App",
       "kind": "command",
       "undoable": false,
@@ -612,7 +612,7 @@
           "keys": "contextmenu"
         }
       ],
-      "availability": "Available only when the library contains photos."
+      "availability": "Always available."
     },
     {
       "id": "app.manifest.export",
@@ -5224,6 +5224,77 @@
             "view": "grid"
           },
           "label": "Show in Grid"
+        }
+      ]
+    },
+    {
+      "id": "app.more",
+      "title": "More",
+      "description": "The “⋯” button at the top right on small screens: the tools that have no room in the top bar there.",
+      "items": [
+        {
+          "kind": "action",
+          "actionId": "app.ai.panel.toggle",
+          "label": "AI Conversation"
+        },
+        {
+          "kind": "action",
+          "actionId": "app.palette.open",
+          "label": "Toggle Command Palette"
+        },
+        {
+          "kind": "separator"
+        },
+        {
+          "kind": "action",
+          "actionId": "history.undo",
+          "label": "Undo"
+        },
+        {
+          "kind": "action",
+          "actionId": "history.redo",
+          "label": "Redo"
+        },
+        {
+          "kind": "separator"
+        },
+        {
+          "kind": "action",
+          "actionId": "view.info.toggle",
+          "label": "Toggle Info Overlay"
+        },
+        {
+          "kind": "action",
+          "actionId": "view.filmstrip.toggle",
+          "label": "Toggle Filmstrip"
+        },
+        {
+          "kind": "action",
+          "actionId": "app.theme.toggle",
+          "label": "Toggle Light/Dark Theme"
+        },
+        {
+          "kind": "action",
+          "actionId": "app.shortcuts.open",
+          "label": "Keyboard Shortcuts"
+        },
+        {
+          "kind": "action",
+          "actionId": "app.ai.settings.open",
+          "label": "AI Settings…"
+        },
+        {
+          "kind": "separator"
+        },
+        {
+          "kind": "action",
+          "actionId": "app.account.passkey.add",
+          "label": "Add a Passkey"
+        },
+        {
+          "kind": "action",
+          "actionId": "app.account.signOut",
+          "label": "Sign Out"
         }
       ]
     }

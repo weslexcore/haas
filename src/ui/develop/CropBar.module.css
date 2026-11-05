@@ -55,3 +55,25 @@
   background: var(--accent);
   color: #fff;
 }
+
+/* Small screens: a wrapping strip along the bottom of the stage, above the filmstrip. */
+/* Small-screen layout (set by App on <html>). */
+:global(html[data-layout="mobile"]) .bar {
+  top: auto;
+  bottom: var(--space-2);
+  left: var(--space-2);
+  right: var(--space-2);
+  transform: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  white-space: normal;
+}
+
+:global(html[data-layout="mobile"]) .button {
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+}
+
+:global(html[data-layout="mobile"]) .field select {
+  min-height: 36px;
+}

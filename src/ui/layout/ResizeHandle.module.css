@@ -43,3 +43,14 @@ body[data-dragging] .handle:active {
   outline: none;
   box-shadow: 0 0 0 2px var(--focus-ring);
 }
+
+/* Fingers need a wider grab area than a mouse. */
+@media (hover: none) and (pointer: coarse) {
+  .vertical::before {
+    inset: 0 -10px;
+  }
+
+  .horizontal::before {
+    inset: -10px 0;
+  }
+}

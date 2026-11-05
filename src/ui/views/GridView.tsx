@@ -1,11 +1,13 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
-import { LAYOUT_LIMITS } from "../../core/state/layout";
 import { companionOf, selectVisibleIds } from "../../core/state/selectors";
 import type { PhotoRecord } from "../../core/state/types";
-import { useAppState, useDispatch, useShortcut } from "../hooks";
-import { Icon } from "../shell/Icon";
+import { useAppState } from "../hooks";
+import { useLongPress, type Point } from "../hooks/gestures";
+import { useMobileLayout } from "../hooks/media";
+import { pointerKindOf } from "../input-store";
 import { FilterBar } from "./FilterBar";
+import { GridSizeSlider } from "./GridSizeSlider";
 import { usePhotoInteractions } from "./photo-interactions";
 import { FlagMark, LabelDot, Stars } from "./PhotoMeta";
 import { Thumb } from "./Thumb";
@@ -22,7 +24,8 @@ export function GridView() {
   const { activeId, ids } = useAppState((s) => s.selection);
   const selected = new Set(ids);
   const cellTarget = useAppState((s) => s.layout.gridCellWidth);
-  const { select, openMenu, dispatch } = usePhotoInteractions("grid.photo");
+  const mobile = useMobileLayout();
+  const { select, openMenu, openMenuAt, dispatch } = usePhotoInteractions("grid.photo");
   const openLoupe = useCallback(() => void dispatch("view.set", { view: "loupe" }), [dispatch]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -59,9 +62,12 @@ export function GridView() {
 
   return (
     <div className={styles.layout}>
-      <FilterBar>
-        <GridSizeSlider />
-      </FilterBar>
+      {/* On small screens the filter lives in a sheet behind the bottom bar's Filter button. */}
+      {!mobile && (
+        <FilterBar>
+          <GridSizeSlider />
+        </FilterBar>
+      )}
       <div ref={scrollRef} className={styles.scroller}>
         {visible.length === 0 ? (
           <p className={styles.noMatches}>No photos match the filter.</p>
@@ -91,8 +97,10 @@ export function GridView() {
                       count={visible.length}
                       selected={selected.has(id)}
                       active={id === activeId}
+                      only={id === activeId && ids.length === 1}
                       onSelect={select}
                       onMenu={openMenu}
+                      onMenuAt={openMenuAt}
                       onOpen={openLoupe}
                     />
                   ))}
@@ -105,52 +113,23 @@ export function GridView() {
   );
 }
 
-/** Thumbnail size: a slider at the right end of the filter bar. Double-click restores the default. */
-function GridSizeSlider() {
-  const width = useAppState((s) => s.layout.gridCellWidth);
-  const dispatch = useDispatch();
-  const larger = useShortcut("view.grid.size.step", { direction: "larger" });
-  const smaller = useShortcut("view.grid.size.step", { direction: "smaller" });
-  const { min, max, step } = LAYOUT_LIMITS.gridCellWidth;
-  const keys = larger && smaller ? ` (${smaller.strokes.join(" ")} / ${larger.strokes.join(" ")})` : "";
-  return (
-    <label className={styles.size} title={`Thumbnail size${keys}; double-click to reset`}>
-      <Icon name="grid" size={14} />
-      <input
-        type="range"
-        className={styles.sizeRange}
-        aria-label="Thumbnail size"
-        min={min}
-        max={max}
-        step={step}
-        value={width}
-        onChange={(e) => void dispatch("view.grid.size.set", { width: Number(e.target.value) })}
-        onDoubleClick={() => void dispatch("view.grid.size.set")}
-        onKeyDown={(e) => {
-          // Global shortcuts pause while an input has focus; keep the step keys working on the slider itself.
-          const direction = e.key === "=" || e.key === "+" ? "larger" : e.key === "-" ? "smaller" : null;
-          if (!direction) return;
-          e.preventDefault();
-          void dispatch("view.grid.size.step", { direction });
-        }}
-      />
-    </label>
-  );
-}
-
 interface CellProps {
   photo: PhotoRecord;
   position: number;
   count: number;
   selected: boolean;
   active: boolean;
+  /** The only selected photo: a second tap on it opens Loupe (touch has no double-click). */
+  only: boolean;
   onSelect: (e: MouseEvent, id: string) => void;
   onMenu: (e: MouseEvent, id: string) => void;
+  onMenuAt: (id: string, at: Point) => void;
   onOpen: () => void;
 }
 
-const GridCell = memo(function GridCell({ photo, position, count, selected, active, onSelect, onMenu, onOpen }: CellProps) {
+const GridCell = memo(function GridCell({ photo, position, count, selected, active, only, onSelect, onMenu, onMenuAt, onOpen }: CellProps) {
   const paired = useAppState((s) => !!companionOf(s, photo.id));
+  const press = useLongPress((at) => onMenuAt(photo.id, at));
   return (
     <div role="listitem" aria-setsize={count} aria-posinset={position}>
       <button
@@ -160,9 +139,13 @@ const GridCell = memo(function GridCell({ photo, position, count, selected, acti
         aria-pressed={selected}
         aria-current={active ? "true" : undefined}
         aria-label={photo.fileName}
-        onClick={(e) => onSelect(e, photo.id)}
+        {...press}
+        onClick={(e) => (only && pointerKindOf(e) === "touch" ? onOpen() : onSelect(e, photo.id))}
         onDoubleClick={onOpen}
-        onContextMenu={(e) => onMenu(e, photo.id)}
+        onContextMenu={(e) => {
+          press.onContextMenu(e);
+          onMenu(e, photo.id);
+        }}
       >
         <span className={styles.index}>{position}</span>
         {paired && (

@@ -311,3 +311,27 @@
   border: 1px solid var(--border-strong);
   background: var(--surface-panel);
 }
+
+/* Small screens: the conversation takes the whole window. */
+/* Small-screen layout (set by App on <html>). */
+:global(html[data-layout="mobile"]) .panel {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:global(html[data-layout="mobile"]) .headerButton,
+:global(html[data-layout="mobile"]) .close {
+  min-height: 36px;
+}
+
+:global(html[data-layout="mobile"]) .primary,
+:global(html[data-layout="mobile"]) .secondary {
+  min-height: 40px;
+}

@@ -54,3 +54,8 @@
   position: absolute;
   color: var(--text-muted);
 }
+
+/* Small-screen layout (set by App on <html>). */
+:global(html[data-layout="mobile"]) .container {
+  margin: var(--space-2);
+}

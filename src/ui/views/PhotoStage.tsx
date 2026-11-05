@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { companionOf, displayedRecord, selectVisibleIds } from "../../core/state/selectors";
 import type { PhotoRecord } from "../../core/state/types";
 import { useAppState, useDispatch } from "../hooks";
+import { useLongPress, type Point } from "../hooks/gestures";
 import { useRuntime } from "../runtime-context";
 import { unsupportedMessage } from "../unsupported";
 import { FlagMark, LabelDot, Placeholder, Stars, formatCaptured, formatExposure } from "./PhotoMeta";
@@ -55,7 +56,7 @@ interface PhotoStageProps {
   badge?: string;
 }
 
-/** The active photo, large: fit or 100% zoom, info overlay, right-click menu. */
+/** The active photo, large: fit or 100% zoom, info overlay, right-click (or long-press) menu. */
 export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoStageProps) {
   const runtime = useRuntime();
   const photo = useAppState((s) => (s.selection.activeId ? s.photos.byId[s.selection.activeId] : undefined));
@@ -67,6 +68,15 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
   const { url, error } = useImageUrl(photo);
   const stageRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState<string | null>(null);
+
+  const openMenu = (at: Point) => void dispatch("app.contextMenu.open", { menuId: "loupe.photo", x: at.x, y: at.y });
+  const press = useLongPress(openMenu);
+  const onContextMenu = (e: MouseEvent) => {
+    press.onContextMenu(e);
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+    openMenu({ x: e.clientX, y: e.clientY });
+  };
 
   // Centre the image when switching to 100%.
   useEffect(() => {
@@ -98,25 +108,13 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
   // Edited photos render through the develop pipeline so Loupe shows the edits.
   if (photo.edit) {
     return (
-      <div className={styles.editedStage} data-zoom={zoom}>
-        <DevelopCanvas
-          key={photo.id}
-          photo={photo}
-          scale={zoom === "actual" ? "actual" : "fit"}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            void dispatch("app.contextMenu.open", { menuId: "loupe.photo", x: e.clientX, y: e.clientY });
-          }}
-        />
+      <div className={styles.editedStage} data-zoom={zoom} {...press} onContextMenu={onContextMenu}>
+        <DevelopCanvas key={photo.id} photo={photo} scale={zoom === "actual" ? "actual" : "fit"} />
         {info && <InfoOverlay photo={photo} />}
       </div>
     );
   }
 
-  const onContextMenu = (e: MouseEvent) => {
-    e.preventDefault();
-    void dispatch("app.contextMenu.open", { menuId: "loupe.photo", x: e.clientX, y: e.clientY });
-  };
   const dpr = window.devicePixelRatio || 1;
   const unsupported = error || failed === photo.id;
 
@@ -124,6 +122,7 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
     <div
       ref={stageRef}
       className={`${styles.stage} ${zoom === "actual" ? styles.actual : ""}`}
+      {...press}
       onContextMenu={onContextMenu}
       data-photo-id={photo.id}
     >

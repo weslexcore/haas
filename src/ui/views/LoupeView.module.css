@@ -3,3 +3,14 @@
   flex-direction: column;
   height: 100%;
 }
+
+.stageWrap {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Horizontal finger movement goes to the swipe handler; vertical panning and pinching stay with the browser. */
+.swipeable {
+  touch-action: pan-y pinch-zoom;
+}

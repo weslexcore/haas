@@ -44,6 +44,18 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | `T T` | Toggle light/dark theme (a chord) |
 | `⌘A` | Select all |
 
+## Phones and tablets
+
+The same app, reshaped for a small screen and for fingers (no keyboard needed):
+
+- **Bottom bar** (narrow windows): Grid, Loupe and Develop, a **Filter** sheet with every filter and sort control (and the thumbnail size), and **Photo**, which opens the photo menu. The **⋯** button at the top right holds the rest: AI, undo/redo, info overlay, filmstrip, theme, shortcuts, account.
+- **Rating bar** (touch screens): stars, pick/reject, colour labels and an auto-advance toggle for the selected photos, so culling works without the number and letter keys. Tapping the current value clears it.
+- **Gestures**: tap a photo to select it and tap it again to open it in Loupe; long-press a photo (or the big photo) for its menu; swipe left or right in Loupe or Develop for the next or previous photo (at 100% zoom the swipe pans instead); tap the photo to toggle 100%.
+- **Develop** stacks the controls under the photo in a sheet: drag its top edge to resize it, or collapse it with the chevron. Crop & Straighten works with a finger too.
+- Menus open as sheets along the bottom edge; submenus drill in with a Back row.
+
+The narrow layout starts at 720px wide; the touch affordances follow the device (`hover: none` and `pointer: coarse`), so a tablet with a mouse keeps the desktop layout and a tablet without one gets the rating bar. The `mobile` project in `playwright.config.ts` runs the phone tests (`yarn e2e --project mobile`).
+
 ## Accounts
 
 Photon asks people to sign in before the app loads, using [Supabase Auth](https://supabase.com/docs/guides/auth) with no passwords:
