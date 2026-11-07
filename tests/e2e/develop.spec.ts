@@ -112,6 +112,31 @@ test.describe("develop (sample library)", () => {
     await expect.poll(ratio).toBeCloseTo(1.5, 1); // the whole drag was one step
   });
 
+  test("crop tool: Shift while dragging a corner keeps the aspect ratio", async ({ page }) => {
+    const crop = () =>
+      page.evaluate(async () => {
+        const r = (await window.photo!.dispatch("develop.settings.get")) as { value: { settings: { crop: { width: number; height: number } } } };
+        return r.value.settings.crop;
+      });
+    await page.keyboard.press("r");
+    const area = page.getByRole("group", { name: "Crop area" });
+    await expect(area).toBeVisible();
+    const box = (await area.boundingBox())!;
+    // Drag the bottom-right corner up and a little left, with Shift: the corner slides along the diagonal.
+    await page.mouse.move(box.x + box.width, box.y + box.height);
+    await page.mouse.down();
+    await page.keyboard.down("Shift");
+    await page.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.5, { steps: 5 });
+    await expect(page.getByText("Aspect ratio locked")).toBeVisible();
+    await page.mouse.up();
+    await page.keyboard.up("Shift");
+    const c = await crop();
+    // The whole frame is 1×1 in fractions, so the shape stays 1:1: (0.9 + 0.5) / 2 along the diagonal.
+    expect(c.width / c.height).toBeCloseTo(1, 2);
+    expect(c.height).toBeCloseTo(0.7, 1);
+    await expect(page.getByText("Aspect ratio locked")).toBeHidden();
+  });
+
   test("crop tool: drag outside to rotate, ⌘-drag a line to level", async ({ page }) => {
     const angle = () =>
       page.evaluate(async () => {
