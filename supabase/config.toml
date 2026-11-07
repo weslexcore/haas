@@ -239,15 +239,8 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
-# [auth.email.smtp]
-# enabled = true
-# host = "smtp.sendgrid.net"
-# port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# Production SMTP (Resend) is set under [remotes.production] at the end of this file, so the
+# local stack keeps catching emails in Mailpit (http://localhost:54324) instead of sending them.
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -428,3 +421,33 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# ── Hosted project ──────────────────────────────────────────────────────────────────────────────
+# Overrides that `supabase config push` applies to the project whose ref matches `project_id`
+# (Dashboard → Project Settings → General). `supabase start` ignores them.
+[remotes.production]
+project_id = "your-project-ref"
+
+# Sign-in emails through Resend's SMTP relay (https://resend.com/docs/send-with-smtp). Before
+# pushing: add and verify the sending domain in Resend, set admin_email to an address on it, and
+# create an API key with sending access. The key is read from the environment, never committed:
+#   RESEND_API_KEY=re_... supabase config push
+[remotes.production.auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "signin@example.com"
+sender_name = "Photon"
+
+# Supabase's built-in sender allows only a few emails an hour; with Resend the limit can be raised
+# (Resend's free plan sends 100 emails a day). The other limits repeat the defaults above.
+[remotes.production.auth.rate_limit]
+email_sent = 30
+sms_sent = 30
+anonymous_users = 30
+token_refresh = 150
+sign_in_sign_ups = 30
+token_verifications = 30
+web3 = 30

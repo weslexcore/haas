@@ -77,7 +77,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 - set `site_url`, `additional_redirect_urls` and the `[auth.webauthn]` relying party to the production domain. Passkeys are bound to `rp_id`, so changing it later makes existing passkeys stop working;
 - enable `[auth.sms]` plus one SMS provider to turn on phone sign-in;
-- set up custom SMTP: Supabase's built-in email sender only allows a few emails an hour.
+- send sign-in emails through [Resend](https://resend.com): Supabase's built-in sender is for testing and only allows a few emails an hour. The settings are ready under `[remotes.production]` in `config.toml`, which `supabase config push` applies to the hosted project only (the local stack keeps catching emails in Mailpit). Add and verify your domain in Resend, create an API key with sending access, set `admin_email` to an address on that domain and `project_id` to the hosted project's ref, then push with the key in the environment: `RESEND_API_KEY=re_… supabase config push`. The key is never committed. Resend's SMTP relay is `smtp.resend.com`, user `resend`, password = the API key, port 465 (or 587 and 2587 for STARTTLS).
 
 Without a URL and key, the dev server skips sign-in (with a console warning) and a production build shows a "Sign-in isn't set up" screen. `VITE_AUTH=off` turns sign-in off; the e2e tests use it.
 
