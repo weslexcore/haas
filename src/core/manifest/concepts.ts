@@ -107,6 +107,16 @@ export const CONCEPTS: Concept[] = [
       "of its profile's look, so it renders the same where that profile isn't installed.",
   },
   {
+    term: "Masks",
+    explanation:
+      "Local adjustments: a mask is an area of the photo with its own Basic sliders, tone curve and HSL, added to " +
+      "the photo's settings inside it (develop.mask.add / update / remove; up to 8 per photo, listed in " +
+      "develop.settings.get). Shapes: linear and radial gradients (positions as fractions of the uncropped " +
+      "photo), luminance and colour ranges of the original pixels, and segments detected by an in-browser model " +
+      "(sky, subject, background, people, vegetation, water). A mask can be inverted or switched off. Masks are " +
+      "part of the edit recipe, so they copy, sync, reset and save to the sidecar like other settings.",
+  },
+  {
     term: "Auto",
     explanation:
       "`develop.auto` sets tone (exposure, contrast, highlights, shadows, whites, blacks, vibrance) and/or " +
@@ -177,6 +187,15 @@ export const WORKFLOWS: Workflow[] = [
       },
       { actionId: "develop.profile.set", params: { profileId: "user.moody-teal" }, note: "Apply it with the returned id." },
       { actionId: "develop.profiles.export", params: { ids: ["user.moody-teal"] }, note: "Optionally save it to a file to share." },
+    ],
+  },
+  {
+    title: "Darken the sky and lift the subject",
+    goal: "Local adjustments on the selected photos, as two masks.",
+    steps: [
+      { actionId: "develop.mask.add", params: { shape: { type: "segment", target: "sky" }, adjustments: { exposure: -0.7, highlights: -40, saturation: 15 } }, note: "Detects the sky in each photo; returns the mask id." },
+      { actionId: "develop.mask.add", params: { shape: { type: "segment", target: "subject" }, adjustments: { exposure: 0.4, shadows: 25 } }, note: "A second mask for the subject." },
+      { actionId: "library.photos.view", params: { photoIds: ["DSC_0001.jpg"], size: "preview" }, note: "Look at the result; then refine with develop.mask.update using the returned ids." },
     ],
   },
   {

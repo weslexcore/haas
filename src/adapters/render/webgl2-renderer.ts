@@ -1,12 +1,19 @@
 import { affineToMat3, cropOutputSize, cropToSourceAffine, fitWithin, type Size } from "../../core/develop/crop";
-import { computeHistogram, uniformsFor, type Histogram } from "../../core/develop/pipeline";
-import { DEFAULT_CROP, type EditRecipe } from "../../core/develop/recipe";
+import { SHAPE_CODES, SHAPE_CODE_NONE, resampleBitmap, shapeParams, type MaskBitmaps } from "../../core/develop/masks";
+import { computeHistogram, uniformsFor, type Histogram, type MaskUniforms } from "../../core/develop/pipeline";
+import { DEFAULT_CROP, MAX_MASKS, type EditRecipe } from "../../core/develop/recipe";
 import type { DevelopRenderer, RenderOptions } from "../../core/develop/renderer";
-import { FRAGMENT, VERTEX } from "./shaders";
+import { CURVE_ROWS, FRAGMENT, SHADER_MAX_MASKS, VERTEX } from "./shaders";
 
 const HISTOGRAM_EDGE = 256;
 
 type Canvas = HTMLCanvasElement | OffscreenCanvas;
+
+const UNIFORMS = [
+  "uUvTransform", "uImage", "uCurve", "uMaskBitmaps", "uOriginal", "uSliderA", "uSliderB", "uSliderC", "uVignette", "uVignetteRect", "uHsl",
+  "uProfile", "uProfileAmount", "uMono", "uMonoMix", "uProfileSat", "uShadowTint", "uHighlightTint", "uToneBalance", "uFade", "uGrain", "uGrainCells",
+  "uMaskCount", "uAspect", "uMaskInfo", "uMaskFlags", "uMaskP", "uMaskQ", "uMaskAdjA", "uMaskAdjB", "uMaskAdjC", "uMaskHsl", "uShowMask",
+] as const;
 
 /**
  * WebGL2 implementation of the develop renderer. Works on a regular canvas
@@ -17,6 +24,9 @@ export class WebGL2Renderer implements DevelopRenderer {
   private program: WebGLProgram;
   private image: WebGLTexture;
   private curve: WebGLTexture;
+  private bitmaps: WebGLTexture;
+  /** Texture array layer of each uploaded mask bitmap, by mask id. */
+  private bitmapLayers = new Map<string, number>();
   private loc: Record<string, WebGLUniformLocation | null> = {};
   private fbo: { framebuffer: WebGLFramebuffer; texture: WebGLTexture; size: Size } | null = null;
   private size: Size | null = null;
@@ -26,6 +36,7 @@ export class WebGL2Renderer implements DevelopRenderer {
     const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true, premultipliedAlpha: false, antialias: false }) as WebGL2RenderingContext | null;
     if (!gl) throw new Error("WebGL2 is not available in this browser.");
     this.gl = gl;
+    if (MAX_MASKS !== SHADER_MAX_MASKS) throw new Error("The shader's mask capacity doesn't match the recipe's.");
     this.program = link(gl, VERTEX, FRAGMENT);
     gl.useProgram(this.program);
 
@@ -36,14 +47,7 @@ export class WebGL2Renderer implements DevelopRenderer {
     gl.enableVertexAttribArray(aUv);
     gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 0, 0);
 
-    for (const name of [
-      "uUvTransform", "uImage", "uCurve", "uOriginal", "uWbGains", "uExposure", "uBlackPoint", "uWhitePoint",
-      "uShadows", "uHighlights", "uContrast", "uVibrance", "uSaturation", "uVignette", "uVignetteRect",
-      "uHslHue", "uHslSat", "uHslLum", "uProfile", "uProfileAmount", "uMono", "uMonoMix", "uProfileSat",
-      "uShadowTint", "uHighlightTint", "uToneBalance", "uFade", "uGrain", "uGrainCells",
-    ]) {
-      this.loc[name] = gl.getUniformLocation(this.program, name);
-    }
+    for (const name of UNIFORMS) this.loc[name] = gl.getUniformLocation(this.program, name);
 
     this.image = gl.createTexture()!;
     this.curve = gl.createTexture()!;
@@ -53,8 +57,11 @@ export class WebGL2Renderer implements DevelopRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // An empty (1×1, one layer) array so the sampler is always complete; setMaskBitmaps replaces it.
+    this.bitmaps = this.createBitmapArray(1, 1, 1);
     gl.uniform1i(this.loc.uImage!, 0);
     gl.uniform1i(this.loc.uCurve!, 1);
+    gl.uniform1i(this.loc.uMaskBitmaps!, 2);
   }
 
   get maxTextureSize(): number {
@@ -84,6 +91,26 @@ export class WebGL2Renderer implements DevelopRenderer {
     this.size = { ...size };
   }
 
+  setMaskBitmaps(bitmaps: MaskBitmaps): void {
+    const { gl } = this;
+    const entries = Object.entries(bitmaps).slice(0, MAX_MASKS);
+    gl.deleteTexture(this.bitmaps);
+    this.bitmapLayers.clear();
+    if (!entries.length) {
+      this.bitmaps = this.createBitmapArray(1, 1, 1);
+      return;
+    }
+    // One texture array, so every bitmap takes the first one's size.
+    const { width, height } = entries[0]![1];
+    this.bitmaps = this.createBitmapArray(width, height, entries.length);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    entries.forEach(([id, bitmap], layer) => {
+      const b = resampleBitmap(bitmap, width, height);
+      gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, width, height, 1, gl.RED, gl.UNSIGNED_BYTE, b.data);
+      this.bitmapLayers.set(id, layer);
+    });
+  }
+
   /** Output size for a recipe at full source resolution. */
   outputSize(recipe: EditRecipe, opts: RenderOptions = {}): Size {
     if (!this.size) throw new Error("No image loaded.");
@@ -110,7 +137,8 @@ export class WebGL2Renderer implements DevelopRenderer {
   histogram(recipe: EditRecipe, opts: RenderOptions = {}): Histogram {
     const size = fitWithin(this.outputSize(recipe, opts), HISTOGRAM_EDGE);
     const fbo = this.histogramTarget(size);
-    this.draw(recipe, opts, fbo.framebuffer, size);
+    // The histogram describes the image, never the overlay.
+    this.draw(recipe, { ...opts, showMask: undefined }, fbo.framebuffer, size);
     const pixels = readRgba(this.gl, size.width, size.height);
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     return computeHistogram(pixels);
@@ -120,6 +148,7 @@ export class WebGL2Renderer implements DevelopRenderer {
     const { gl } = this;
     gl.deleteTexture(this.image);
     gl.deleteTexture(this.curve);
+    gl.deleteTexture(this.bitmaps);
     if (this.fbo) {
       gl.deleteFramebuffer(this.fbo.framebuffer);
       gl.deleteTexture(this.fbo.texture);
@@ -127,6 +156,19 @@ export class WebGL2Renderer implements DevelopRenderer {
     gl.deleteProgram(this.program);
     // The context itself is kept: getContext() on the same canvas returns it again
     // (e.g. React remounting the component), and it must still be usable.
+  }
+
+  private createBitmapArray(width: number, height: number, layers: number): WebGLTexture {
+    const { gl } = this;
+    const texture = gl.createTexture()!;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R8, width, height, layers);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return texture;
   }
 
   private draw(recipe: EditRecipe, opts: RenderOptions, target: WebGLFramebuffer | null, out: Size): void {
@@ -145,22 +187,15 @@ export class WebGL2Renderer implements DevelopRenderer {
     gl.uniform1i(loc.uOriginal!, opts.original ? 1 : 0);
 
     const u = uniformsFor(recipe);
-    gl.uniform3fv(loc.uWbGains!, u.wbGains);
-    gl.uniform1f(loc.uExposure!, u.exposure);
-    gl.uniform1f(loc.uBlackPoint!, u.blackPoint);
-    gl.uniform1f(loc.uWhitePoint!, u.whitePoint);
-    gl.uniform1f(loc.uShadows!, u.shadows);
-    gl.uniform1f(loc.uHighlights!, u.highlights);
-    gl.uniform1f(loc.uContrast!, u.contrast);
-    gl.uniform1f(loc.uVibrance!, u.vibrance);
-    gl.uniform1f(loc.uSaturation!, u.saturation);
+    const s = u.sliders;
+    gl.uniform4f(loc.uSliderA!, s.temperature, s.tint, s.exposure, s.contrast);
+    gl.uniform4f(loc.uSliderB!, s.highlights, s.shadows, s.whites, s.blacks);
+    gl.uniform2f(loc.uSliderC!, s.vibrance, s.saturation);
     gl.uniform1f(loc.uVignette!, u.vignette);
     // With the crop ignored (crop tool) the frame is the whole image, so centre the vignette on the crop.
     const vr = opts.ignoreCrop && !opts.original ? recipe.crop : DEFAULT_CROP;
     gl.uniform4f(loc.uVignetteRect!, vr.x, vr.y, vr.width, vr.height);
-    gl.uniform1fv(loc.uHslHue!, u.hslHue);
-    gl.uniform1fv(loc.uHslSat!, u.hslSat);
-    gl.uniform1fv(loc.uHslLum!, u.hslLum);
+    gl.uniform4fv(loc.uHsl!, hslVec4s(u.hslHue, u.hslSat, u.hslLum));
 
     const p = u.profile;
     gl.uniform1i(loc.uProfile!, p ? 1 : 0);
@@ -178,25 +213,75 @@ export class WebGL2Renderer implements DevelopRenderer {
       gl.uniform2f(loc.uGrainCells!, p.grainCells * Math.min(1, aspect), p.grainCells * Math.min(1, 1 / aspect));
     }
 
-    // R, G, B: the profile's channel curves; A: the master tone curve.
-    const curveKey = JSON.stringify([recipe.toneCurve, recipe.profile?.look.curves]);
+    this.uploadMasks(u.masks, opts.showMask);
+
+    // Row 0: R, G, B the profile's channel curves, A the master tone curve. Row 1 + i: mask i's curve in A.
+    const curveKey = JSON.stringify([recipe.toneCurve, recipe.profile?.look.curves, u.masks.map((m) => m.mask.adjustments.toneCurve)]);
     if (curveKey !== this.lastCurve) {
-      const lut = new Uint8Array(256 * 4);
+      const lut = new Uint8Array(256 * 4 * CURVE_ROWS);
       for (let i = 0; i < 256; i++) {
         lut[i * 4] = p ? p.curves[0][i]! : i;
         lut[i * 4 + 1] = p ? p.curves[1][i]! : i;
         lut[i * 4 + 2] = p ? p.curves[2][i]! : i;
         lut[i * 4 + 3] = u.curve[i]!;
       }
+      u.masks.forEach((m, row) => {
+        const base = (row + 1) * 256 * 4;
+        for (let i = 0; i < 256; i++) lut[base + i * 4 + 3] = m.curve ? m.curve[i]! : i;
+      });
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.curve);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, lut);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, CURVE_ROWS, 0, gl.RGBA, gl.UNSIGNED_BYTE, lut);
       this.lastCurve = curveKey;
     }
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.bitmaps);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.image);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  private uploadMasks(masks: MaskUniforms[], showMask: string | undefined): void {
+    const { gl, loc } = this;
+    const n = Math.min(masks.length, MAX_MASKS);
+    const info = new Float32Array(MAX_MASKS * 4);
+    const flags = new Float32Array(MAX_MASKS * 4);
+    const P = new Float32Array(MAX_MASKS * 4);
+    const Q = new Float32Array(MAX_MASKS * 4);
+    const adjA = new Float32Array(MAX_MASKS * 4);
+    const adjB = new Float32Array(MAX_MASKS * 4);
+    const adjC = new Float32Array(MAX_MASKS * 2);
+    const hsl = new Float32Array(MAX_MASKS * 8 * 4);
+    let show = -1;
+    for (let i = 0; i < n; i++) {
+      const m = masks[i]!;
+      const { mask } = m;
+      if (mask.id === showMask) show = i;
+      const layer = mask.shape.type === "segment" ? this.bitmapLayers.get(mask.id) : undefined;
+      const code = mask.shape.type === "segment" && layer === undefined ? SHAPE_CODE_NONE : SHAPE_CODES[mask.shape.type];
+      info.set([code, mask.invert ? 1 : 0, layer ?? 0, m.active ? 1 : 0], i * 4);
+      flags.set([m.curve ? 1 : 0, m.hsl ? 1 : 0, 0, 0], i * 4);
+      const { p, q } = shapeParams(mask.shape);
+      P.set(p, i * 4);
+      Q.set(q, i * 4);
+      const s = m.sliders;
+      adjA.set([s.temperature, s.tint, s.exposure, s.contrast], i * 4);
+      adjB.set([s.highlights, s.shadows, s.whites, s.blacks], i * 4);
+      adjC.set([s.vibrance, s.saturation], i * 2);
+      if (m.hsl) hsl.set(hslVec4s(m.hsl.hue, m.hsl.sat, m.hsl.lum), i * 32);
+    }
+    gl.uniform1i(loc.uMaskCount!, n);
+    gl.uniform1f(loc.uAspect!, this.size!.width / this.size!.height);
+    gl.uniform4fv(loc.uMaskInfo!, info);
+    gl.uniform4fv(loc.uMaskFlags!, flags);
+    gl.uniform4fv(loc.uMaskP!, P);
+    gl.uniform4fv(loc.uMaskQ!, Q);
+    gl.uniform4fv(loc.uMaskAdjA!, adjA);
+    gl.uniform4fv(loc.uMaskAdjB!, adjB);
+    gl.uniform2fv(loc.uMaskAdjC!, adjC);
+    gl.uniform4fv(loc.uMaskHsl!, hsl);
+    gl.uniform1i(loc.uShowMask!, show);
   }
 
   private histogramTarget(size: Size) {
@@ -207,7 +292,7 @@ export class WebGL2Renderer implements DevelopRenderer {
       gl.deleteTexture(this.fbo.texture);
     }
     const texture = gl.createTexture()!;
-    gl.activeTexture(gl.TEXTURE2);
+    gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, size.width, size.height);
     const framebuffer = gl.createFramebuffer()!;
@@ -217,6 +302,13 @@ export class WebGL2Renderer implements DevelopRenderer {
     this.fbo = { framebuffer, texture, size };
     return this.fbo;
   }
+}
+
+/** Eight (hue, sat, lum, 0) vec4s. */
+function hslVec4s(hue: number[], sat: number[], lum: number[]): Float32Array {
+  const out = new Float32Array(32);
+  for (let i = 0; i < 8; i++) out.set([hue[i]!, sat[i]!, lum[i]!, 0], i * 4);
+  return out;
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {

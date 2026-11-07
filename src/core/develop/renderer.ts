@@ -1,4 +1,5 @@
 import type { Size } from "./crop";
+import type { MaskBitmaps } from "./masks";
 import type { Histogram } from "./pipeline";
 import type { EditRecipe } from "./recipe";
 
@@ -14,6 +15,8 @@ export interface RenderOptions {
   /** Output size in pixels; defaults to the crop's size at source resolution. */
   width?: number;
   height?: number;
+  /** Paint this mask's coverage over the image in red (the mask tool's overlay). */
+  showMask?: string;
 }
 
 export interface DevelopRenderer {
@@ -21,6 +24,11 @@ export interface DevelopRenderer {
   /** Upload the (already oriented) source image. */
   setSource(image: TexImageSource, size: Size): void;
   readonly sourceSize: Size | null;
+  /**
+   * Upload the bitmaps of the recipe's segment masks, by mask id. A segment
+   * mask without one covers nothing until it arrives. Replaces the previous set.
+   */
+  setMaskBitmaps(bitmaps: MaskBitmaps): void;
   /** Render into the canvas, resizing it to the output size. Returns that size. */
   render(recipe: EditRecipe, opts?: RenderOptions): Size;
   /** Read back the last render as RGBA8, top row first. */

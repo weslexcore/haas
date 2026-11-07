@@ -1,8 +1,11 @@
 import { fitWithin } from "../../core/develop/crop";
+import type { MaskBitmaps } from "../../core/develop/masks";
 import type { EditRecipe } from "../../core/develop/recipe";
 import type { ExportService } from "../../core/services";
 import type { ExportRequest, ExportResponse } from "./export.worker";
 import { WebGL2Renderer } from "./webgl2-renderer";
+
+type Opts = { quality: number; maxEdge?: number; maskBitmaps?: MaskBitmaps };
 
 /**
  * Renders exports in a worker (OffscreenCanvas + WebGL2), one at a time.
@@ -14,7 +17,7 @@ export class WorkerExportService implements ExportService {
   private pending = new Map<number, { resolve: (r: { blob: Blob; width: number; height: number }) => void; reject: (e: Error) => void }>();
   private queue: Promise<unknown> = Promise.resolve();
 
-  renderJpeg(image: ImageBitmap, recipe: EditRecipe, opts: { quality: number; maxEdge?: number }) {
+  renderJpeg(image: ImageBitmap, recipe: EditRecipe, opts: Opts) {
     const run = () => (this.canUseWorker() ? this.inWorker(image, recipe, opts) : renderOnMainThread(image, recipe, opts));
     const result = this.queue.then(run, run);
     this.queue = result.catch(() => undefined);
@@ -25,7 +28,7 @@ export class WorkerExportService implements ExportService {
     return typeof OffscreenCanvas !== "undefined" && typeof Worker !== "undefined";
   }
 
-  private inWorker(image: ImageBitmap, recipe: EditRecipe, opts: { quality: number; maxEdge?: number }) {
+  private inWorker(image: ImageBitmap, recipe: EditRecipe, opts: Opts) {
     if (!this.worker) {
       this.worker = new Worker(new URL("./export.worker.ts", import.meta.url), { type: "module" });
       this.worker.onmessage = (e: MessageEvent<ExportResponse>) => {
@@ -39,7 +42,14 @@ export class WorkerExportService implements ExportService {
     const id = this.nextId++;
     return new Promise<{ blob: Blob; width: number; height: number }>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      const msg: ExportRequest = { id, image, recipe, quality: opts.quality, ...(opts.maxEdge ? { maxEdge: opts.maxEdge } : {}) };
+      const msg: ExportRequest = {
+        id,
+        image,
+        recipe,
+        quality: opts.quality,
+        ...(opts.maxEdge ? { maxEdge: opts.maxEdge } : {}),
+        ...(opts.maskBitmaps ? { maskBitmaps: opts.maskBitmaps } : {}),
+      };
       // Copied, not transferred, so the main-thread fallback can still use it.
       this.worker!.postMessage(msg);
     }).catch(async (error: Error) => {
@@ -50,11 +60,12 @@ export class WorkerExportService implements ExportService {
   }
 }
 
-async function renderOnMainThread(image: ImageBitmap, recipe: EditRecipe, opts: { quality: number; maxEdge?: number }) {
+async function renderOnMainThread(image: ImageBitmap, recipe: EditRecipe, opts: Opts) {
   const canvas = document.createElement("canvas");
   const renderer = new WebGL2Renderer(canvas);
   try {
     renderer.setSource(image, { width: image.width, height: image.height });
+    renderer.setMaskBitmaps(opts.maskBitmaps ?? {});
     const full = renderer.outputSize(recipe);
     const size = opts.maxEdge ? fitWithin(full, opts.maxEdge) : full;
     renderer.render(recipe, size);

@@ -44,6 +44,13 @@ export function applyAffine(m: Affine, u: number, v: number): [number, number] {
   return [m[0] * u + m[1] * v + m[2], m[3] * u + m[4] * v + m[5]];
 }
 
+/** The inverse map (e.g. source uv → output uv, for drawing handles over the rendered photo). */
+export function invertAffine(m: Affine): Affine {
+  const [a, b, c, d, e, f] = m;
+  const det = a * e - b * d || 1e-12;
+  return [e / det, -b / det, (b * f - c * e) / det, -d / det, a / det, (c * d - a * f) / det];
+}
+
 /** Column-major mat3 for GLSL. */
 export function affineToMat3(m: Affine): Float32Array {
   return new Float32Array([m[0], m[3], 0, m[1], m[4], 0, m[2], m[5], 1]);

@@ -13,7 +13,7 @@
     "e2e": "playwright test",
     "manifest": "tsx scripts/generate-manifest.ts",
     "icons": "tsx scripts/render-icons.ts",
-    "manifest:check":"tsx scripts/generate-manifest.ts --check",
+    "manifest:check": "tsx scripts/generate-manifest.ts --check",
     "verify": "yarn typecheck && yarn test && yarn manifest:check"
   },
   "dependencies": {
@@ -25,6 +25,7 @@
     "immer": "^11.1.21",
     "libraw-wasm": "1.6.0",
     "match-sorter": "^8.3.0",
+    "onnxruntime-web": "1.23.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zod": "^4.6.7",

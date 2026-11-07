@@ -20,12 +20,13 @@ import {
   type PartialRecipe,
   type SettingsGroup,
 } from "../core/develop/recipe";
+import { collectMaskBitmaps } from "../core/develop/mask-bitmaps";
 import { baseName } from "../core/library/formats";
 import type { AppState, PhotoRecord } from "../core/state/types";
 import { targetIds } from "./context";
 
 /** Groups copied/pasted/synced by default (crop is per photo, as in Lightroom). */
-const DEFAULT_SYNC_GROUPS: SettingsGroup[] = ["profile", "wb", "basic", "presence", "effects", "toneCurve", "hsl"];
+const DEFAULT_SYNC_GROUPS: SettingsGroup[] = ["profile", "wb", "basic", "presence", "effects", "toneCurve", "hsl", "masks"];
 
 export const photoIds = z
   .array(z.string())
@@ -167,7 +168,7 @@ export const applySettings = defineAction({
   title: "Apply Develop Settings",
   description:
     "Apply several develop settings at once to the selected photos (a look or preset): any Basic sliders, " +
-    "tone curve, HSL bands, crop. Values replace the current ones; omitted settings are unchanged.",
+    "tone curve, HSL bands, crop, masks. Values replace the current ones; omitted settings are unchanged.",
   category: "Develop",
   kind: "command",
   undoable: true,
@@ -195,7 +196,7 @@ export const applySettings = defineAction({
 export const getSettings = defineAction({
   id: "develop.settings.get",
   title: "Get Develop Settings",
-  description: "Return a photo's full develop settings (the active photo by default) and whether it has been edited.",
+  description: "Return a photo's full develop settings (the active photo by default), including its masks and their ids, and whether it has been edited.",
   category: "Develop",
   kind: "query",
   params: z.object({ photoId: z.string().optional().describe("Defaults to the active photo.") }).optional(),
@@ -553,9 +554,13 @@ export const exportJpeg = defineAction({
           }
           let rendered: { blob: Blob; width: number; height: number };
           try {
-            rendered = await ctx.services.exporter.renderJpeg(image, editOf(photo), {
+            const recipe = editOf(photo);
+            // Segment masks need their detected areas; a detection that fails fails this photo rather than exporting it wrong.
+            const maskBitmaps = await collectMaskBitmaps(ctx.services.segmentation, photo, recipe);
+            rendered = await ctx.services.exporter.renderJpeg(image, recipe, {
               quality,
               ...(p?.maxEdge ? { maxEdge: p.maxEdge } : {}),
+              ...(Object.keys(maskBitmaps).length ? { maskBitmaps } : {}),
             });
           } finally {
             image.close();

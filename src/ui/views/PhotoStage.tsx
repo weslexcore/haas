@@ -10,6 +10,7 @@ import { defaultRecipe } from "../../core/develop/recipe";
 import { CropBar } from "../develop/CropBar";
 import { CropOverlay } from "../develop/CropOverlay";
 import { DevelopCanvas } from "../develop/DevelopCanvas";
+import { MaskOverlay } from "../develop/MaskOverlay";
 import styles from "./PhotoStage.module.css";
 
 /**
@@ -64,6 +65,7 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
   const info = useAppState((s) => s.infoOverlay);
   const cropTool = useAppState((s) => zoomable && s.develop.cropTool);
   const levelTool = useAppState((s) => s.develop.levelTool);
+  const maskTool = useAppState((s) => s.develop.maskTool);
   const dispatch = useDispatch();
   const { url, error } = useImageUrl(photo);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -105,11 +107,20 @@ export function PhotoStage({ zoomable = false, dimmed = false, badge }: PhotoSta
     );
   }
 
-  // Edited photos render through the develop pipeline so Loupe shows the edits.
-  if (photo.edit) {
+  // Edited photos render through the develop pipeline so Loupe shows the edits (and the selected mask's handles).
+  if (photo.edit || (zoomable && maskTool.drawing)) {
+    const recipe = photo.edit ?? defaultRecipe();
+    const selectedMask = zoomable ? (recipe.masks.find((m) => m.id === maskTool.selectedId) ?? null) : null;
+    const masking = zoomable && (selectedMask !== null || maskTool.drawing !== null);
     return (
       <div className={styles.editedStage} data-zoom={zoom} {...press} onContextMenu={onContextMenu}>
-        <DevelopCanvas key={photo.id} photo={photo} scale={zoom === "actual" ? "actual" : "fit"} />
+        <DevelopCanvas
+          key={photo.id}
+          photo={photo}
+          scale={zoom === "actual" ? "actual" : "fit"}
+          showMask={masking && maskTool.overlay && selectedMask ? selectedMask.id : undefined}
+          overlay={masking ? (display) => <MaskOverlay photo={photo} mask={selectedMask} crop={recipe.crop} display={display} drawing={maskTool.drawing} /> : undefined}
+        />
         {info && <InfoOverlay photo={photo} />}
       </div>
     );

@@ -8,6 +8,7 @@ import { BrowserLibraryProvider } from "../adapters/library-provider";
 import { BrowserPreviewService } from "../adapters/previews/preview-service";
 import { WorkerExportService } from "../adapters/render/export-service";
 import { BrowserVisionService } from "../adapters/render/vision-service";
+import { BrowserSegmentationService } from "../adapters/segmentation/segmentation-service";
 import { LocalSettingsStore } from "../adapters/settings";
 import { AnthropicProvider } from "../adapters/ai/anthropic-provider";
 import { detectMac } from "../core/keybindings/combo";
@@ -46,13 +47,15 @@ export async function createBrowserRuntime({ auth, account }: { auth: AuthServic
   await ai.load();
   let sync: MetadataSync | null = null;
   const previews = new BrowserPreviewService(library, db);
+  const segmentation = new BrowserSegmentationService(previews);
   const services: Services = {
     auth,
     settings: settingsStore,
     library,
     metadata: new DexieMetadataStore(db),
     previews,
-    vision: new BrowserVisionService(previews),
+    segmentation,
+    vision: new BrowserVisionService(previews, segmentation),
     persistence: { flush: () => sync?.flush() ?? Promise.resolve() },
     exporter: new WorkerExportService(),
     ai,
