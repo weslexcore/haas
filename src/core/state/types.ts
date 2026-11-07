@@ -93,9 +93,21 @@ export interface ContextMenuState {
   y: number | null;
 }
 
+/** A running export (develop.export): progress for the UI, and whether a stop was asked for. */
+export interface ExportJob {
+  /** Photos finished so far, including failures. */
+  done: number;
+  total: number;
+  failed: number;
+  /** develop.export.cancel was dispatched: the export stops after the current photo. */
+  cancelRequested: boolean;
+}
+
 export interface DevelopState {
   /** Settings copied with develop.settings.copy, and which groups to paste. */
   clipboard: { recipe: EditRecipe; groups: SettingsGroup[] } | null;
+  /** The export in progress, or null. Only one runs at a time. */
+  exportJob: ExportJob | null;
   /** Crop & straighten overlay is active. */
   cropTool: boolean;
   /** In the crop overlay, the next drag draws a line to straighten along. */
@@ -179,7 +191,7 @@ export const initialState: AppState = {
   palette: { open: false, actionId: null },
   contextMenu: null,
   shortcutsOpen: false,
-  develop: { clipboard: null, cropTool: false, levelTool: false, profiles: [] },
+  develop: { clipboard: null, exportJob: null, cropTool: false, levelTool: false, profiles: [] },
   ai: { previewing: false, settingsOpen: false, panelOpen: false, thread: [] },
   library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0, groupRawJpeg: true },
   photos: { order: [], byId: {} },

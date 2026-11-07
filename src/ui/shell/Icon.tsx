@@ -23,6 +23,7 @@ const PATHS = {
   flag: "M5 21V4h11l-1.5 3.5L16 11H5",
   reject: "M6 6l12 12M18 6 6 18",
   advance: "M4 12h12m0 0-4-4m4 4-4 4M20 6v12",
+  export: "M12 15V4m0 0-4 4m4-4 4 4M5 14v5h14v-5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

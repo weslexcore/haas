@@ -10,6 +10,7 @@ import { useRuntime } from "./runtime-context";
 import { toast } from "./toasts";
 import { ShortcutsSettings } from "./settings/ShortcutsSettings";
 import { CullBar } from "./shell/CullBar";
+import { ExportProgress } from "./shell/ExportProgress";
 import { MobileNav } from "./shell/MobileNav";
 import { StatusBar } from "./shell/StatusBar";
 import { Toasts } from "./shell/Toasts";
@@ -41,6 +42,7 @@ export function App() {
       </main>
       {touch && <CullBar />}
       {mobile ? <MobileNav /> : <StatusBar />}
+      {mobile && <ExportProgress floating />}
       <CommandPalette />
       <ShortcutsSettings />
       <ContextMenu />
@@ -86,6 +88,8 @@ function useResultToasts() {
           restored?: number;
           deleted?: number;
           exported?: number;
+          total?: number;
+          cancelled?: boolean;
           destination?: string;
           failed?: Array<{ path: string; error: string }>;
         };
@@ -94,7 +98,9 @@ function useResultToasts() {
         if (id === "library.removed.restore" && v.restored) toast(`Restored ${n(v.restored)}.`);
         if (id === "app.account.passkey.add") toast("Passkey added. Next time, sign in with it.");
         if (id === "library.removed.empty") toast(`Permanently deleted ${n(v.deleted ?? 0)}.`);
-        if (id === "develop.export" && v.exported) {
+        if (id === "develop.export" && v.cancelled) {
+          toast(`Export stopped after ${v.exported ?? 0} of ${n(v.total ?? 0)}.`);
+        } else if (id === "develop.export" && v.exported) {
           toast(v.destination === "folder" ? `Exported ${n(v.exported)} to the _Exports folder.` : `Exported ${n(v.exported)} as downloads.`);
         }
         if (v.failed?.length) {

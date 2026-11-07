@@ -39,7 +39,7 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | `R` | Crop & straighten tool (Loupe or Develop): drag outside the crop to rotate, ⌘/Ctrl-drag along a horizon to level it, hold Shift while resizing to keep the aspect ratio |
 | `⌘⇧C` / `⌘⇧V` / `⌘⇧S` | Copy / paste / sync develop settings |
 | `⌘⇧R` | Reset develop settings |
-| `⌘⇧E` | Export JPEG (to `_Exports/`, or downloads for read-only folders) |
+| `⌘⇧E` | Export the selected photos as JPEGs (select several in the Grid, or `⌘A` for all; to `_Exports/`, or downloads for read-only folders). Also in the photo menu and the top bar; the status bar shows progress with a Cancel button |
 | `⌘Z` / `⇧⌘Z` | Undo, redo |
 | `T T` | Toggle light/dark theme (a chord) |
 | `⌘A` | Select all |

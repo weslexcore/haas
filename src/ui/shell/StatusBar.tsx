@@ -4,6 +4,7 @@ import { useAppState, useHistory, usePendingChord, useShortcut } from "../hooks"
 import { inputStore } from "../input-store";
 import { useRuntime } from "../runtime-context";
 import { FlagMark, LabelDot, Stars } from "../views/PhotoMeta";
+import { ExportProgress } from "./ExportProgress";
 import { Kbd } from "./Kbd";
 import styles from "./StatusBar.module.css";
 
@@ -40,6 +41,7 @@ export function StatusBar() {
           Reading EXIF {status.done}/{status.total}
         </span>
       )}
+      <ExportProgress />
       {active && (
         <span className={styles.active}>
           <span>{active.fileName}</span>

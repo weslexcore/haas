@@ -334,6 +334,21 @@ test.describe("develop with real files", () => {
     await expect(page.getByRole("list", { name: "Photos" }).getByRole("listitem")).toHaveCount(4);
   });
 
+  test("bulk export: several selected photos, from the grid's context menu", async ({ page }) => {
+    await openShoot(page);
+    const grid = page.getByRole("list", { name: "Photos" });
+    await grid.getByRole("button", { name: "IMG_0001.jpg", exact: true }).click();
+    await grid.getByRole("button", { name: "IMG_0004.jpg", exact: true }).click({ modifiers: ["Shift"] }); // 0001, 0002, 0004 by capture time
+    await expect(page.getByRole("contentinfo")).toContainText("3 selected");
+    await grid.getByRole("button", { name: "IMG_0002.jpg", exact: true }).click({ button: "right" });
+    await page.getByRole("menu", { name: "Photo" }).getByRole("menuitem", { name: "Export JPEG…" }).click();
+    await expect(page.getByText("Exported 3 photos to the _Exports folder.")).toBeVisible();
+    for (const name of ["IMG_0001.jpg", "IMG_0002.jpg", "IMG_0004.jpg"]) {
+      expect(await measureExport(page, `_Exports/${name}`)).toMatchObject({ type: "image/jpeg" });
+    }
+    await expect(page.getByRole("button", { name: "Cancel Export" })).toHaveCount(0); // progress is gone once done
+  });
+
   test("portrait photos export upright", async ({ page }) => {
     await openShoot(page);
     await page.getByRole("list", { name: "Photos" }).getByRole("button", { name: "IMG_0004.jpg", exact: true }).click();

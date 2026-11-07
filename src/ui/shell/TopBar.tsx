@@ -81,6 +81,9 @@ export function TopBar() {
         <ActionButton actionId="app.ai.panel.toggle" className={styles.icon} label="AI conversation">
           <Icon name="sparkle" />
         </ActionButton>
+        <ActionButton actionId="develop.export" className={styles.icon}>
+          <Icon name="export" />
+        </ActionButton>
         <ActionButton actionId="history.undo" className={styles.icon}>
           <Icon name="undo" />
         </ActionButton>
