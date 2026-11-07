@@ -107,6 +107,107 @@ export const recipeProfileSchema = z.object({
 
 export type RecipeProfile = z.infer<typeof recipeProfileSchema>;
 
+// ── Masks ────────────────────────────────────────────────────────────────
+
+/** Sliders a mask can adjust locally: every Basic slider (the vignette is whole-frame). */
+export type MaskSliderName = Exclude<SliderName, "vignette">;
+export const MASK_SLIDER_NAMES = SLIDER_NAMES.filter((n): n is MaskSliderName => n !== "vignette");
+
+/** At most this many masks per photo (the shader has room for exactly this many). */
+export const MAX_MASKS = 8;
+
+/** What a segment mask detects in the photo (an in-browser scene segmentation model). */
+export const SEGMENT_TARGETS = ["subject", "sky", "background", "people", "vegetation", "water"] as const;
+export type SegmentTarget = (typeof SEGMENT_TARGETS)[number];
+
+/**
+ * A point on the photo as fractions of its width and height (0–1 inside;
+ * slightly outside is allowed so a gradient can start off the edge). Masks
+ * are placed on the source photo, so they stay on the same pixels whatever
+ * the crop and straighten angle.
+ */
+const uv = z.number().min(-1).max(2);
+const maskPoint = z.object({ x: uv, y: uv });
+export type MaskPoint = z.infer<typeof maskPoint>;
+
+export const maskShapeSchema = z
+  .discriminatedUnion("type", [
+    z
+      .object({
+        type: z.literal("linear"),
+        from: maskPoint.describe("Where the mask is fully on."),
+        to: maskPoint.describe("Where it has faded to nothing. Before `from` it is fully on, past `to` it is off."),
+      })
+      .describe("Linear gradient: full strength at `from`, fading to nothing at `to`."),
+    z
+      .object({
+        type: z.literal("radial"),
+        center: maskPoint.describe("Centre of the ellipse."),
+        radiusX: z.number().min(0.005).max(2).describe("Horizontal radius, as a fraction of the photo's width."),
+        radiusY: z.number().min(0.005).max(2).describe("Vertical radius, as a fraction of the photo's height."),
+        angle: z.number().min(-180).max(180).default(0).describe("Rotation of the ellipse in degrees, clockwise."),
+        feather: z.number().min(0).max(100).default(50).describe("Softness of the edge: 0 hard, 100 fades from the centre."),
+      })
+      .describe("Radial gradient: full strength inside an ellipse, feathered at its edge."),
+    z
+      .object({
+        type: z.literal("luminance"),
+        low: z.number().min(0).max(100).default(0).describe("Darkest luminance included, 0–100."),
+        high: z.number().min(0).max(100).default(100).describe("Brightest luminance included, 0–100."),
+        feather: z.number().min(0).max(100).default(20).describe("How far beyond the range the mask fades out, in luminance units."),
+      })
+      .describe("Luminance range: pixels of the original photo whose brightness is between low and high."),
+    z
+      .object({
+        type: z.literal("color"),
+        hue: z.number().min(0).max(360).describe("Hue to select, in degrees (0 red, 60 yellow, 120 green, 210 sky blue, 300 magenta)."),
+        range: z.number().min(5).max(180).default(40).describe("Width of the hue range in degrees."),
+        feather: z.number().min(0).max(100).default(50).describe("Softness beyond the range (100 = 90 degrees)."),
+      })
+      .describe("Colour range: pixels of the original photo close to a hue (greys are never selected)."),
+    z
+      .object({
+        type: z.literal("segment"),
+        target: z.enum(SEGMENT_TARGETS).describe("What to detect: subject (people, animals, vehicles), sky, background (everything but the subject), people, vegetation or water."),
+      })
+      .describe("Detected by a scene segmentation model running in the browser (downloaded on first use)."),
+  ])
+  .describe("The area a mask covers.");
+
+export type MaskShape = z.infer<typeof maskShapeSchema>;
+export type MaskShapeType = MaskShape["type"];
+
+const maskSlider = (name: MaskSliderName) => slider(name).default(0);
+
+/** What a mask changes inside its area, on top of the photo's own settings. */
+export const maskAdjustmentsSchema = z
+  .object({
+    ...(Object.fromEntries(MASK_SLIDER_NAMES.map((n) => [n, maskSlider(n)])) as Record<MaskSliderName, z.ZodDefault<z.ZodNumber>>),
+    toneCurve: channelCurve.describe("Tone curve applied inside the mask, as an offset from the identity; [[0,0],[1,1]] is none."),
+    hsl: z
+      .object({ hue: bands, saturation: bands, luminance: bands })
+      .default(() => ({ hue: zeroBands(), saturation: zeroBands(), luminance: zeroBands() }))
+      .describe("Per-colour adjustments inside the mask, -100 to 100 by band."),
+  })
+  .describe("Adjustments applied inside the mask, added to the photo's settings there.");
+
+export type MaskAdjustments = z.infer<typeof maskAdjustmentsSchema>;
+
+export function defaultMaskAdjustments(): MaskAdjustments {
+  return maskAdjustmentsSchema.parse({});
+}
+
+export const maskSchema = z.object({
+  id: z.string().min(1).max(32).describe("Unique within the photo."),
+  name: z.string().max(60).default("").describe("Shown in the panel; empty for a name from the shape."),
+  enabled: z.boolean().default(true),
+  invert: z.boolean().default(false).describe("Apply the adjustments everywhere except the area."),
+  shape: maskShapeSchema,
+  adjustments: maskAdjustmentsSchema.default(defaultMaskAdjustments),
+});
+
+export type Mask = z.infer<typeof maskSchema>;
+
 export const recipeSchema = z.object({
   version: z.literal(1),
   // Sliders default to neutral so recipes saved before a slider existed still parse.
@@ -117,12 +218,16 @@ export const recipeSchema = z.object({
   crop: cropSchema,
   /** Absent: no profile. */
   profile: recipeProfileSchema.optional(),
+  /** Local adjustments, applied in order on top of the global settings. Recipes saved before masks existed have none. */
+  masks: z.array(maskSchema).max(MAX_MASKS).default(() => []),
 });
 
 export type EditRecipe = z.infer<typeof recipeSchema>;
 export type CropRect = z.infer<typeof cropSchema>;
 
-const zeroBands = () => Object.fromEntries(HSL_BANDS.map((b) => [b, 0])) as Record<HslBand, number>;
+function zeroBands() {
+  return Object.fromEntries(HSL_BANDS.map((b) => [b, 0])) as Record<HslBand, number>;
+}
 
 export const DEFAULT_CROP: CropRect = { x: 0, y: 0, width: 1, height: 1, angle: 0 };
 
@@ -136,17 +241,18 @@ export function defaultRecipe(): EditRecipe {
     ],
     hsl: { hue: zeroBands(), saturation: zeroBands(), luminance: zeroBands() },
     crop: { ...DEFAULT_CROP },
+    masks: [],
   };
 }
 
 /** Settings groups, for reset/copy/paste/sync of only some settings. */
-export const GROUPS = ["profile", "wb", "basic", "presence", "effects", "toneCurve", "hsl", "crop"] as const;
+export const GROUPS = ["profile", "wb", "basic", "presence", "effects", "toneCurve", "hsl", "crop", "masks"] as const;
 export type SettingsGroup = (typeof GROUPS)[number];
 export const groupSchema = z.enum(GROUPS);
 
 /** Keys of the recipe that belong to each group. */
 export function groupKeys(group: SettingsGroup): Array<keyof EditRecipe> {
-  if (group === "profile" || group === "toneCurve" || group === "hsl" || group === "crop") return [group];
+  if (group === "profile" || group === "toneCurve" || group === "hsl" || group === "crop" || group === "masks") return [group];
   return SLIDER_NAMES.filter((n) => SLIDERS[n].group === group);
 }
 
@@ -182,10 +288,35 @@ export const partialRecipeSchema = z
       .optional()
       .describe("Per-colour adjustments, -100 to 100, by band (red, orange, yellow, green, aqua, blue, purple, magenta)."),
     crop: cropSchema.partial().optional().describe("Crop rectangle (fractions) and straighten angle (degrees)."),
+    masks: z.array(maskSchema).max(MAX_MASKS).optional().describe("Replaces every mask (use the develop.mask.* actions to change one)."),
   })
   .describe("Settings to change; anything omitted is left as it is.");
 
 export type PartialRecipe = z.infer<typeof partialRecipeSchema>;
+
+/** Deep-partial mask adjustments, as accepted by develop.mask.update. */
+export const partialMaskAdjustmentsSchema = z
+  .object({
+    ...(Object.fromEntries(MASK_SLIDER_NAMES.map((n) => [n, slider(n).optional()])) as Record<MaskSliderName, z.ZodOptional<z.ZodNumber>>),
+    toneCurve: z.array(curvePoint).min(2).max(16).optional().describe("Tone curve control points [input, output], 0–1; [[0,0],[1,1]] is none."),
+    hsl: z
+      .object({ hue: partialBands.optional(), saturation: partialBands.optional(), luminance: partialBands.optional() })
+      .optional()
+      .describe("Per-colour adjustments, -100 to 100, by band."),
+  })
+  .describe("Adjustments to change inside the mask; anything omitted is left as it is.");
+
+export type PartialMaskAdjustments = z.infer<typeof partialMaskAdjustmentsSchema>;
+
+export function applyPartialAdjustments(base: MaskAdjustments, p: PartialMaskAdjustments): MaskAdjustments {
+  const out = structuredClone(base);
+  for (const n of MASK_SLIDER_NAMES) if (p[n] !== undefined) out[n] = p[n]!;
+  if (p.toneCurve) out.toneCurve = normalizeCurve(p.toneCurve);
+  if (p.hsl) {
+    for (const ch of ["hue", "saturation", "luminance"] as const) Object.assign(out.hsl[ch], p.hsl[ch] ?? {});
+  }
+  return out;
+}
 
 export function applyPartial(base: EditRecipe, p: PartialRecipe): EditRecipe {
   const out = structuredClone(base);
@@ -195,6 +326,7 @@ export function applyPartial(base: EditRecipe, p: PartialRecipe): EditRecipe {
     for (const ch of ["hue", "saturation", "luminance"] as const) Object.assign(out.hsl[ch], p.hsl[ch] ?? {});
   }
   if (p.crop) out.crop = { ...out.crop, ...p.crop };
+  if (p.masks) out.masks = structuredClone(p.masks);
   return out;
 }
 

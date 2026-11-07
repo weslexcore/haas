@@ -3,6 +3,7 @@ import type { Histogram } from "../../core/develop/pipeline";
 import { CropOverlay } from "../develop/CropOverlay";
 import { DevelopCanvas } from "../develop/DevelopCanvas";
 import { DevelopPanel } from "../develop/DevelopPanel";
+import { MaskOverlay } from "../develop/MaskOverlay";
 import { defaultRecipe } from "../../core/develop/recipe";
 import { LAYOUT_LIMITS } from "../../core/state/layout";
 import { useAppState, useDispatch } from "../hooks";
@@ -24,6 +25,7 @@ export function DevelopView() {
   const filmstrip = useAppState((s) => s.filmstrip);
   const cropTool = useAppState((s) => s.develop.cropTool);
   const levelTool = useAppState((s) => s.develop.levelTool);
+  const maskTool = useAppState((s) => s.develop.maskTool);
   const info = useAppState((s) => s.infoOverlay);
   const { panelDocked, panelSide, panelWidth } = useAppState((s) => s.layout);
   const mobile = useMobileLayout();
@@ -39,13 +41,17 @@ export function DevelopView() {
   const swipe = useSwipe((direction) => void dispatch(direction < 0 ? "navigation.next" : "navigation.previous"));
 
   if (!photo) return <div className={styles.layout} />;
-  const crop = (photo.edit ?? defaultRecipe()).crop;
+  const recipe = photo.edit ?? defaultRecipe();
+  const crop = recipe.crop;
+  const selectedMask = recipe.masks.find((m) => m.id === maskTool.selectedId) ?? null;
+  // Handles for the selected mask (or drawing a new one) replace the swipe gesture, as the crop tool does.
+  const masking = !cropTool && !beforeAfter && (selectedMask !== null || maskTool.drawing !== null);
 
   const stage = (
     <div
-      className={`${styles.stage} ${cropTool ? "" : styles.swipeable}`}
+      className={`${styles.stage} ${cropTool || masking ? "" : styles.swipeable}`}
       {...press}
-      {...(cropTool ? {} : swipe)}
+      {...(cropTool || masking ? {} : swipe)}
       onContextMenu={(e) => {
         press.onContextMenu(e);
         if (e.defaultPrevented) return;
@@ -59,7 +65,14 @@ export function DevelopView() {
         original={beforeAfter}
         ignoreCrop={cropTool && !beforeAfter}
         onHistogram={setHistogram}
-        overlay={cropTool && !beforeAfter ? (display) => <CropOverlay crop={crop} display={display} levelTool={levelTool} /> : undefined}
+        showMask={masking && maskTool.overlay && selectedMask ? selectedMask.id : undefined}
+        overlay={
+          cropTool && !beforeAfter
+            ? (display) => <CropOverlay crop={crop} display={display} levelTool={levelTool} />
+            : masking
+              ? (display) => <MaskOverlay photo={photo} mask={selectedMask} crop={crop} display={display} drawing={maskTool.drawing} />
+              : undefined
+        }
       />
       {beforeAfter && <span className={styles.badge}>Before</span>}
       {info && <InfoOverlay photo={photo} />}

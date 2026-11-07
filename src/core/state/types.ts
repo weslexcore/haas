@@ -103,6 +103,16 @@ export interface ExportJob {
   cancelRequested: boolean;
 }
 
+/** The mask tool (develop.mask.*): which mask is being edited and how it is shown. */
+export interface MaskToolState {
+  /** The mask whose handles are shown and whose adjustments the panel edits (per id; a photo without it shows none). */
+  selectedId: string | null;
+  /** Paint the selected mask's coverage over the photo in red. */
+  overlay: boolean;
+  /** Armed to draw a new gradient: the next drag on the photo creates it. */
+  drawing: "linear" | "radial" | null;
+}
+
 export interface DevelopState {
   /** Settings copied with develop.settings.copy, and which groups to paste. */
   clipboard: { recipe: EditRecipe; groups: SettingsGroup[] } | null;
@@ -112,6 +122,7 @@ export interface DevelopState {
   cropTool: boolean;
   /** In the crop overlay, the next drag draws a line to straighten along. */
   levelTool: boolean;
+  maskTool: MaskToolState;
   /** The user's own profiles (built-ins are in core/develop/profiles.ts). Persisted in local settings. */
   profiles: Profile[];
 }
@@ -191,7 +202,7 @@ export const initialState: AppState = {
   palette: { open: false, actionId: null },
   contextMenu: null,
   shortcutsOpen: false,
-  develop: { clipboard: null, exportJob: null, cropTool: false, levelTool: false, profiles: [] },
+  develop: { clipboard: null, exportJob: null, cropTool: false, levelTool: false, maskTool: { selectedId: null, overlay: false, drawing: null }, profiles: [] },
   ai: { previewing: false, settingsOpen: false, panelOpen: false, thread: [] },
   library: { folder: null, status: { kind: "empty" }, filter: defaultFilter, sort: defaultSort, removedCount: 0, groupRawJpeg: true },
   photos: { order: [], byId: {} },

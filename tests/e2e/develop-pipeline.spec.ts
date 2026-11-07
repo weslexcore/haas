@@ -12,7 +12,7 @@ test("GPU develop pipeline matches the CPU reference", async ({ page }) => {
     const load = (path: string) => import(/* @vite-ignore */ path);
     const { WebGL2Renderer } = (await load("/src/adapters/render/webgl2-renderer.ts")) as typeof import("../../src/adapters/render/webgl2-renderer");
     const { processImageData } = (await load("/src/core/develop/pipeline.ts")) as typeof import("../../src/core/develop/pipeline");
-    const { defaultRecipe, applyPartial, lookSchema } = (await load("/src/core/develop/recipe.ts")) as typeof import("../../src/core/develop/recipe");
+    const { defaultRecipe, applyPartial, lookSchema, applyPartialAdjustments, defaultMaskAdjustments, partialMaskAdjustmentsSchema } = (await load("/src/core/develop/recipe.ts")) as typeof import("../../src/core/develop/recipe");
     const { BUILTIN_PROFILES } = (await load("/src/core/develop/profiles.ts")) as typeof import("../../src/core/develop/profiles");
 
     // Hue sweep across, lightness down, plus a grey ramp row band.
@@ -26,7 +26,7 @@ test("GPU develop pipeline matches the CPU reference", async ({ page }) => {
       }
     }
     const source = c2d.getImageData(0, 0, W, H);
-    const bitmap = await createImageBitmap(source);
+    const bitmap0 = await createImageBitmap(source);
 
     const recipes = {
       neutral: {},
@@ -61,15 +61,38 @@ test("GPU develop pipeline matches the CPU reference", async ({ page }) => {
     );
     profiled["profile mono grain"] = withProfile("user.mono", "Mono", lookSchema.parse({ monochrome: { red: 120, green: -40, blue: 20 }, grain: { amount: 80, size: 100 } }), 150);
 
+    // Masks: every shape, inverted, stacked, disabled, with curves and HSL inside, and a bitmap (segment) mask.
+    type Mask = import("../../src/core/develop/recipe").Mask;
+    const adj = (a: Record<string, unknown>) => applyPartialAdjustments(defaultMaskAdjustments(), partialMaskAdjustmentsSchema.parse(a));
+    const mask = (id: string, shape: Mask["shape"], adjustments: Record<string, unknown>, extra: Partial<Mask> = {}): Mask => ({ id, name: "", enabled: true, invert: false, shape, adjustments: adj(adjustments), ...extra });
+    const withMasks = (masks: Mask[]): Recipe => ({ ...applyPartial(defaultRecipe(), { exposure: 0.2, contrast: 10, vignette: -30 }), masks });
+    // An 8×8 bitmap: coverage rising left to right, with the bottom row empty.
+    const bitmap = { width: 8, height: 8, data: new Uint8ClampedArray(64).map((_, i) => (i >= 56 ? 0 : Math.round(((i % 8) / 7) * 255))) };
+    const masked: Record<string, Recipe> = {
+      "mask linear": withMasks([mask("a", { type: "linear", from: { x: 0.5, y: 0.1 }, to: { x: 0.5, y: 0.7 } }, { exposure: -1.5, saturation: -50 })]),
+      "mask radial inverted": withMasks([mask("a", { type: "radial", center: { x: 0.4, y: 0.5 }, radiusX: 0.25, radiusY: 0.35, angle: 30, feather: 60 }, { temperature: 60, shadows: 50, toneCurve: [[0, 0.1], [0.5, 0.4], [1, 1]] }, { invert: true })]),
+      "mask luminance": withMasks([mask("a", { type: "luminance", low: 30, high: 70, feather: 15 }, { contrast: 60, hsl: { hue: { blue: 80, green: -60 }, saturation: { red: 70 }, luminance: { yellow: -50 } } })]),
+      "mask colour": withMasks([mask("a", { type: "color", hue: 120, range: 60, feather: 50 }, { saturation: -100, exposure: 0.5 })]),
+      "mask segment": withMasks([mask("seg", { type: "segment", target: "sky" }, { exposure: -2, tint: -40 })]),
+      "masks stacked": withMasks([
+        mask("a", { type: "linear", from: { x: 0, y: 0.5 }, to: { x: 1, y: 0.5 } }, { exposure: 2 }),
+        mask("b", { type: "radial", center: { x: 0.5, y: 0.5 }, radiusX: 0.4, radiusY: 0.4, angle: 0, feather: 0 }, { exposure: -3, contrast: -80, toneCurve: [[0, 0], [0.5, 0.7], [1, 1]] }),
+        mask("c", { type: "luminance", low: 0, high: 100, feather: 20 }, { exposure: 5 }, { enabled: false }),
+        mask("seg", { type: "segment", target: "subject" }, { highlights: -80, whites: 40, blacks: -40, vibrance: 80, hsl: { hue: { red: 100 } } }),
+        mask("d", { type: "color", hue: 0, range: 40, feather: 0 }, {}),
+      ]),
+    };
+
     const renderer = new WebGL2Renderer(new OffscreenCanvas(1, 1));
-    renderer.setSource(bitmap, { width: W, height: H });
+    renderer.setSource(bitmap0, { width: W, height: H });
+    renderer.setMaskBitmaps({ seg: bitmap });
     const out: Record<string, { maxDiff: number; meanDiff: number }> = {};
-    const all: Array<[string, Recipe]> = [...Object.entries(recipes).map(([name, partial]) => [name, applyPartial(defaultRecipe(), partial as never)] as [string, Recipe]), ...Object.entries(profiled)];
+    const all: Array<[string, Recipe]> = [...Object.entries(recipes).map(([name, partial]) => [name, applyPartial(defaultRecipe(), partial as never)] as [string, Recipe]), ...Object.entries(profiled), ...Object.entries(masked)];
     for (const [name, recipe] of all) {
       renderer.render(recipe);
       const gpu = renderer.readPixels();
       const cpu = new Uint8ClampedArray(source.data);
-      processImageData(cpu, recipe, W);
+      processImageData(cpu, recipe, W, { seg: bitmap });
       let max = 0;
       let sum = 0;
       for (let i = 0; i < cpu.length; i += 4) {
@@ -81,14 +104,26 @@ test("GPU develop pipeline matches the CPU reference", async ({ page }) => {
       }
       out[name] = { maxDiff: max, meanDiff: sum / ((cpu.length / 4) * 3) };
     }
-    return out;
+
+    // The mask overlay paints coverage in red: full at the top of the linear mask, nothing below it.
+    const overlay = masked["mask linear"]!;
+    renderer.render(overlay);
+    const plain = renderer.readPixels();
+    renderer.render(overlay, { showMask: "a" });
+    const painted = renderer.readPixels();
+    const redness = (px: Uint8Array, x: number, y: number) => px[(y * W + x) * 4]! - px[(y * W + x) * 4 + 1]!;
+    const top = redness(painted, 48, 2) - redness(plain, 48, 2);
+    const bottom = redness(painted, 48, H - 2) - redness(plain, 48, H - 2);
+    return { out, top, bottom };
   });
 
-  for (const [name, r] of Object.entries(results)) {
+  for (const [name, r] of Object.entries(results.out)) {
     // Float precision and 8-bit LUT filtering differ slightly between GPU and JS.
     expect(r.meanDiff, `${name} mean difference`).toBeLessThan(0.6);
     expect(r.maxDiff, `${name} max difference`).toBeLessThanOrEqual(4);
   }
+  expect(results.top).toBeGreaterThan(40);
+  expect(results.bottom).toBe(0);
 });
 
 test("crop and straighten map output pixels to the right source pixels", async ({ page }) => {

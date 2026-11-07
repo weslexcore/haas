@@ -10,6 +10,7 @@ import { useRuntime } from "../runtime-context";
 import { unsupportedMessage } from "../unsupported";
 import { PREVIEW_EDGE, editingBitmap } from "./bitmaps";
 import styles from "./DevelopCanvas.module.css";
+import { useMaskBitmaps } from "./mask-bitmaps";
 
 interface DevelopCanvasProps {
   photo: PhotoRecord;
@@ -22,14 +23,17 @@ interface DevelopCanvasProps {
   onHistogram?: (h: Histogram) => void;
   /** Rendered over the image, sized to it (e.g. the crop overlay). Receives the displayed size in CSS px. */
   overlay?: (display: Size) => ReactNode;
+  /** Paint this mask's coverage in red over the photo. */
+  showMask?: string;
   onContextMenu?: (e: React.MouseEvent) => void;
 }
 
 /**
  * The edited photo, rendered live on the GPU. Re-renders on every settings
- * change (once per animation frame) and reports a histogram.
+ * change (once per animation frame) and reports a histogram. Segment masks'
+ * bitmaps are fetched here as they are needed.
  */
-export function DevelopCanvas({ photo, original = false, ignoreCrop = false, scale = "fit", onHistogram, overlay, onContextMenu }: DevelopCanvasProps) {
+export function DevelopCanvas({ photo, original = false, ignoreCrop = false, scale = "fit", onHistogram, overlay, showMask, onContextMenu }: DevelopCanvasProps) {
   const { services } = useRuntime();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -38,6 +42,7 @@ export function DevelopCanvas({ photo, original = false, ignoreCrop = false, sca
   const [source, setSource] = useState<{ id: string; size: Size } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const recipe = photo.edit ?? DEFAULT_RECIPE;
+  const { bitmaps } = useMaskBitmaps(photo, photo.edit);
   const histogramRef = useRef(onHistogram);
   histogramRef.current = onHistogram;
 
@@ -121,18 +126,24 @@ export function DevelopCanvas({ photo, original = false, ignoreCrop = false, sca
     }
   }
 
+  // Segment masks' detected areas, as they arrive.
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (renderer && ready) renderer.setMaskBitmaps(bitmaps);
+  }, [bitmaps, ready]);
+
   // Render once per frame after any change.
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer || !ready || display.width === 0) return;
     const frame = requestAnimationFrame(() => {
-      const opts = { original, ignoreCrop, width: backing.width, height: backing.height };
+      const opts = { original, ignoreCrop, width: backing.width, height: backing.height, ...(showMask ? { showMask } : {}) };
       renderer.render(recipe, opts);
       // The histogram always describes the final (cropped) image, even while the crop tool shows the whole frame.
       if (histogramRef.current) histogramRef.current(renderer.histogram(recipe, { original }));
     });
     return () => cancelAnimationFrame(frame);
-  }, [recipe, original, ignoreCrop, ready, backing.width, backing.height, display.width]);
+  }, [recipe, original, ignoreCrop, ready, backing.width, backing.height, display.width, bitmaps, showMask]);
 
   return (
     <div ref={containerRef} className={`${styles.container} ${scale === "actual" ? styles.actual : ""}`} onContextMenu={onContextMenu} data-photo-id={photo.id}>

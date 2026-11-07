@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { maskSchema } from "../../src/core/develop/recipe";
 import { parseXmp, writeXmp, XmpError } from "../../src/core/xmp/xmp";
 
 const darktable = `<?xml version="1.0" encoding="UTF-8"?>
@@ -76,8 +77,11 @@ describe("develop recipe in XMP", () => {
   it("round-trips the recipe and removes it when reset", async () => {
     const { defaultRecipe } = await import("../../src/core/develop/recipe");
     const edit = { ...defaultRecipe(), exposure: 0.7, toneCurve: [[0, 0.1], [1, 1]] as Array<[number, number]> };
+    // Masks travel in the sidecar too, in Photon's own namespace.
+    edit.masks = [maskSchema.parse({ id: "m1", name: "Sky", shape: { type: "segment", target: "sky" }, adjustments: { exposure: -0.8 } })];
     const xml = writeXmp(null, { rating: 3, flag: "none", colorLabel: "none", edit });
     expect(parseXmp(xml).edit).toEqual(edit);
+    expect(parseXmp(xml).edit?.masks[0]).toMatchObject({ id: "m1", shape: { target: "sky" }, adjustments: { exposure: -0.8, contrast: 0 } });
     const cleared = writeXmp(xml, { rating: 3, flag: "none", colorLabel: "none", edit: null });
     expect(parseXmp(cleared).edit).toBeUndefined();
   });

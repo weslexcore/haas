@@ -1,5 +1,6 @@
 import { fitWithin } from "../../core/develop/crop";
-import type { CapturedImage, PreviewService, VisionService } from "../../core/services";
+import { collectMaskBitmaps } from "../../core/develop/mask-bitmaps";
+import type { CapturedImage, PreviewService, SegmentationService, VisionService } from "../../core/services";
 import type { PhotoRecord } from "../../core/state/types";
 import { WebGL2Renderer } from "./webgl2-renderer";
 
@@ -11,7 +12,10 @@ export class BrowserVisionService implements VisionService {
   private renderer: WebGL2Renderer | null = null;
   private queue: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly previews: PreviewService) {}
+  constructor(
+    private readonly previews: PreviewService,
+    private readonly segmentation?: SegmentationService,
+  ) {}
 
   capture(photo: PhotoRecord, opts: { maxEdge: number; edited: boolean }): Promise<CapturedImage> {
     const run = async () => {
@@ -21,8 +25,11 @@ export class BrowserVisionService implements VisionService {
       const edited = opts.edited && !!photo.edit;
       const canvas = document.createElement("canvas");
       if (edited) {
+        // A segment mask whose detection fails is shown without its effect, rather than failing the look.
+        const bitmaps = this.segmentation ? await collectMaskBitmaps(this.segmentation, photo, photo.edit, { lenient: true }) : {};
         this.renderer ??= new WebGL2Renderer(document.createElement("canvas"));
         this.renderer.setSource(bitmap, { width: bitmap.width, height: bitmap.height });
+        this.renderer.setMaskBitmaps(bitmaps);
         const size = fitWithin(this.renderer.outputSize(photo.edit!), opts.maxEdge);
         this.renderer.render(photo.edit!, size);
         canvas.width = size.width;

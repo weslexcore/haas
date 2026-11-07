@@ -1,5 +1,6 @@
 import type { PixelData } from "../develop/auto";
-import type { EditRecipe } from "../develop/recipe";
+import type { MaskBitmap, MaskBitmaps } from "../develop/masks";
+import type { EditRecipe, SegmentTarget } from "../develop/recipe";
 import type { ColorLabel, ExifSummary, Flag, FolderInfo, PhotoRecord } from "../state/types";
 
 /**
@@ -213,8 +214,21 @@ export interface ExportService {
   renderJpeg(
     image: ImageBitmap,
     recipe: EditRecipe,
-    opts: { quality: number; maxEdge?: number },
+    opts: { quality: number; maxEdge?: number; maskBitmaps?: MaskBitmaps },
   ): Promise<{ blob: Blob; width: number; height: number }>;
+}
+
+/**
+ * Scene segmentation for segment masks: a soft mask of what a target
+ * (sky, subject, …) covers in a photo, from a model running in the browser.
+ * Results are cached per photo, so asking again is cheap.
+ */
+export interface SegmentationService {
+  segment(photo: PhotoRecord, target: SegmentTarget): Promise<MaskBitmap>;
+  /** Progress of the model download, for the UI (null once it is loaded, or before it starts). */
+  readonly loading: { loaded: number; total: number } | null;
+  /** Called whenever `loading` changes. Returns an unsubscribe function. */
+  onLoading(listener: () => void): () => void;
 }
 
 /** Passwordless accounts (Supabase Auth in the browser). Signing in happens before the runtime exists. */
@@ -234,6 +248,7 @@ export interface Services {
   persistence: PersistenceBarrier;
   exporter: ExportService;
   vision: VisionService;
+  segmentation: SegmentationService;
   ai: AIProvider;
   downloads: DownloadService;
 }

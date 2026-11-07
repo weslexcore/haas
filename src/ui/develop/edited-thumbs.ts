@@ -1,5 +1,6 @@
 import { WebGL2Renderer } from "../../adapters/render/webgl2-renderer";
 import { fitWithin } from "../../core/develop/crop";
+import type { MaskBitmaps } from "../../core/develop/masks";
 import type { EditRecipe } from "../../core/develop/recipe";
 import type { PreviewService } from "../../core/services";
 import type { PhotoRecord } from "../../core/state/types";
@@ -20,13 +21,16 @@ function shared(): WebGL2Renderer {
   return renderer;
 }
 
-export function editedThumbKey(photo: PhotoRecord, recipe: EditRecipe): string {
-  return `${photo.id}|${photo.lastModified ?? 0}|${JSON.stringify(recipe)}`;
+export function editedThumbKey(photo: PhotoRecord, recipe: EditRecipe, bitmaps?: MaskBitmaps): string {
+  return `${photo.id}|${photo.lastModified ?? 0}|${JSON.stringify(recipe)}|${bitmaps ? Object.keys(bitmaps).sort().join(",") : ""}`;
 }
 
-/** Object URL of the photo's thumbnail with `recipe` applied (null if it can't be made). */
-export function editedThumbnailUrl(previews: PreviewService, photo: PhotoRecord, recipe: EditRecipe, baseUrl: string | null): Promise<string | null> {
-  const key = editedThumbKey(photo, recipe);
+/**
+ * Object URL of the photo's thumbnail with `recipe` applied (null if it can't
+ * be made). `bitmaps` are the recipe's segment masks, when they are known.
+ */
+export function editedThumbnailUrl(previews: PreviewService, photo: PhotoRecord, recipe: EditRecipe, baseUrl: string | null, bitmaps: MaskBitmaps = {}): Promise<string | null> {
+  const key = editedThumbKey(photo, recipe, bitmaps);
   const hit = urls.get(key);
   if (hit) return hit;
   const job = queue.then(async () => {
@@ -37,6 +41,7 @@ export function editedThumbnailUrl(previews: PreviewService, photo: PhotoRecord,
     const r = shared();
     r.setSource(bitmap, { width: bitmap.width, height: bitmap.height });
     bitmap.close();
+    r.setMaskBitmaps(bitmaps);
     r.render(recipe, fitWithin(r.outputSize(recipe), THUMB_EDGE));
     const canvas = r.canvas as HTMLCanvasElement;
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));

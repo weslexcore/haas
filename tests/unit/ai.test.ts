@@ -8,6 +8,7 @@ import { reviewStep } from "../../src/core/ai/plan";
 import { MetadataSync } from "../../src/core/library/metadata-sync";
 import type { Plan } from "../../src/core/services";
 import { MemorySource } from "../../src/adapters/memory-source";
+import { NullSegmentationService } from "../../src/adapters/segmentation/segmentation-service";
 import { createRuntime } from "../../src/core/runtime";
 import { allMenus } from "../../src/menus";
 import { FakePreviews, TestLibraryProvider } from "./helpers";
@@ -31,6 +32,7 @@ async function runtimeWithAi(respond?: ConstructorParameters<typeof StubAIProvid
         capture: async (photo, opts) => ({ photoId: photo.id, mediaType: "image/jpeg" as const, data: "AAAA", width: opts.maxEdge, height: Math.round(opts.maxEdge * 2 / 3), edited: opts.edited && !!photo.edit }),
       },
       exporter: { renderJpeg: async () => ({ blob: new Blob([]), width: 1, height: 1 }) },
+      segmentation: new NullSegmentationService(),
       ai,
       downloads: { save: () => undefined, saveBlob: () => undefined },
     },

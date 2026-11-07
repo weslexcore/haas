@@ -1,0 +1,93 @@
+/* Lets clicks and swipes through to the photo, except on the handles; drawing takes the whole frame. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.drawing {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.lines line,
+.lines ellipse {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.9));
+}
+
+.edgeEmpty {
+  stroke-dasharray: 6 4;
+}
+
+.connector {
+  stroke-opacity: 0.7;
+}
+
+.handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.45);
+  box-shadow: 0 0 2px rgb(0 0 0 / 0.8);
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.handle:active {
+  cursor: grabbing;
+}
+
+.move {
+  width: 18px;
+  height: 18px;
+  margin: -9px;
+  background: var(--accent);
+  cursor: move;
+}
+
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  margin: 0;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.65);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Fingers: bigger targets. */
+@media (hover: none) and (pointer: coarse) {
+  .handle {
+    width: 28px;
+    height: 28px;
+    margin: -14px;
+  }
+
+  .move {
+    width: 32px;
+    height: 32px;
+    margin: -16px;
+  }
+}

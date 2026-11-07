@@ -1,5 +1,6 @@
 import { allActions } from "../../src/actions";
 import type { PixelData } from "../../src/core/develop/auto";
+import type { MaskBitmap } from "../../src/core/develop/masks";
 import { MemoryMetadataStore } from "../../src/adapters/db";
 import { NullPreviewService } from "../../src/adapters/previews/preview-service";
 import { SampleSource } from "../../src/adapters/sample-source";
@@ -86,9 +87,15 @@ export interface TestRuntime extends Runtime {
   auth: { signedOut: number; passkeys: number };
   downloads: Array<{ fileName: string; content: string }>;
   exports: Array<{ recipe: unknown; opts: unknown }>;
+  /** Segmentation requests made (photo id and target); a target listed in `segmentFails` rejects. */
+  segmentations: Array<{ photoId: string; target: string }>;
+  segmentFails: Set<string>;
   library: TestLibraryProvider;
   metadata: MemoryMetadataStore;
 }
+
+/** A 4×4 mask: the top half (rows 0–1) fully covered, the bottom half not. */
+export const fakeMaskBitmap = (): MaskBitmap => ({ width: 4, height: 4, data: new Uint8ClampedArray([...Array(8).fill(255), ...Array(8).fill(0)]) });
 
 export async function createTestRuntime(
   opts: {
@@ -103,6 +110,8 @@ export async function createTestRuntime(
 ): Promise<TestRuntime> {
   const downloads: TestRuntime["downloads"] = [];
   const exports: TestRuntime["exports"] = [];
+  const segmentations: TestRuntime["segmentations"] = [];
+  const segmentFails = new Set<string>();
   const library = new TestLibraryProvider(opts.photos ?? 10);
   const metadata = new MemoryMetadataStore();
   const auth = { signedOut: 0, passkeys: 0, signOut: async () => void auth.signedOut++, addPasskey: async () => (auth.passkeys++, { name: "Test Passkey" }) };
@@ -127,6 +136,15 @@ export async function createTestRuntime(
           return { blob: new Blob(["jpeg"], { type: "image/jpeg" }), width: 100, height: 50 };
         },
       },
+      segmentation: {
+        loading: null,
+        onLoading: () => () => undefined,
+        segment: async (photo, target) => {
+          segmentations.push({ photoId: photo.id, target });
+          if (segmentFails.has(target)) throw new Error(`Can't detect ${target}`);
+          return fakeMaskBitmap();
+        },
+      },
       ai: new StubAIProvider(),
       downloads: {
         save: (fileName, content) => downloads.push({ fileName, content }),
@@ -136,7 +154,7 @@ export async function createTestRuntime(
   });
   await runtime.keybindings.load();
   if (opts.loadSample !== false && runtime.registry.get("library.sample.load")) await runtime.dispatch("library.sample.load");
-  return Object.assign(runtime, { auth, downloads, exports, library, metadata });
+  return Object.assign(runtime, { auth, downloads, exports, segmentations, segmentFails, library, metadata });
 }
 
 export function key(

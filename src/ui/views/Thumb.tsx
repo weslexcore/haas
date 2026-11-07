@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { editedThumbnailUrl } from "../develop/edited-thumbs";
+import { collectMaskBitmaps } from "../../core/develop/mask-bitmaps";
 import { extension } from "../../core/library/formats";
 import { fileKey } from "../../core/library/util";
 import { displayedRecord } from "../../core/state/selectors";
@@ -53,7 +54,10 @@ function useEditedThumbnail(photo: PhotoRecord, baseUrl: string | null): string 
     let live = true;
     const recipe = photo.edit;
     const timer = setTimeout(() => {
-      void editedThumbnailUrl(services.previews, photo, recipe, baseUrl).then((u) => live && setUrl(u));
+      // Segment masks need their bitmaps; one that can't be detected is left out of the thumbnail.
+      void collectMaskBitmaps(services.segmentation, photo, recipe, { lenient: true })
+        .then((bitmaps) => editedThumbnailUrl(services.previews, photo, recipe, baseUrl, bitmaps))
+        .then((u) => live && setUrl(u));
     }, 250);
     return () => {
       live = false;

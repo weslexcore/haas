@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { fitWithin } from "../../core/develop/crop";
+import type { MaskBitmaps } from "../../core/develop/masks";
 import type { EditRecipe } from "../../core/develop/recipe";
 import { WebGL2Renderer } from "./webgl2-renderer";
 
@@ -9,6 +10,8 @@ export interface ExportRequest {
   recipe: EditRecipe;
   quality: number;
   maxEdge?: number;
+  /** Bitmaps for the recipe's segment masks. */
+  maskBitmaps?: MaskBitmaps;
 }
 
 export type ExportResponse =
@@ -19,11 +22,12 @@ let renderer: WebGL2Renderer | null = null;
 
 /** Full-resolution render of the edit to JPEG, off the main thread. */
 self.onmessage = async (e: MessageEvent<ExportRequest>) => {
-  const { id, image, recipe, quality, maxEdge } = e.data;
+  const { id, image, recipe, quality, maxEdge, maskBitmaps } = e.data;
   try {
     renderer ??= new WebGL2Renderer(new OffscreenCanvas(1, 1));
     renderer.setSource(image, { width: image.width, height: image.height });
     image.close(); // our copy
+    renderer.setMaskBitmaps(maskBitmaps ?? {});
     const full = renderer.outputSize(recipe);
     const size = maxEdge ? fitWithin(full, maxEdge) : full;
     renderer.render(recipe, size);

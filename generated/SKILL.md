@@ -48,6 +48,8 @@ A browser-based photo culling and editing app, in the spirit of Lightroom. Users
 
 **Profiles.** A profile is a film look applied under the sliders (as in Lightroom): colour or black and white, per-channel curves, split toning, fade and grain, with an amount (0–200%). Applying one keeps the sliders. There are built-in profiles (ids `builtin.…`) and the user's own (`user.…`), which can be created, edited, deleted, and exported to or imported from JSON files. A photo's edit holds a copy of its profile's look, so it renders the same where that profile isn't installed.
 
+**Masks.** Local adjustments: a mask is an area of the photo with its own Basic sliders, tone curve and HSL, added to the photo's settings inside it (develop.mask.add / update / remove; up to 8 per photo, listed in develop.settings.get). Shapes: linear and radial gradients (positions as fractions of the uncropped photo), luminance and colour ranges of the original pixels, and segments detected by an in-browser model (sky, subject, background, people, vegetation, water). A mask can be inverted or switched off. Masks are part of the edit recipe, so they copy, sync, reset and save to the sidecar like other settings.
+
 **Auto.** `develop.auto` sets tone (exposure, contrast, highlights, shadows, whites, blacks, vibrance) and/or white balance from each photo's own pixels, inside its crop, accounting for its profile. Each photo is analysed separately, so a batch gets individual settings in one undo step.
 
 **Undo and transactions.** Undoable commands are recorded in history. A transaction groups several commands into one undo step; AI-proposed plans are always applied as a single transaction after the user reviews them.
@@ -84,6 +86,14 @@ Save a look as one of the user's own profiles and apply it.
 1. `develop.profiles.create` `{"name":"Moody Teal","from":"builtin.cool-cinema","look":{"fade":10,"grain":{"amount":20}}}`: Start from a built-in look and change some fields; returns the new id.
 2. `develop.profile.set` `{"profileId":"user.moody-teal"}`: Apply it with the returned id.
 3. `develop.profiles.export` `{"ids":["user.moody-teal"]}`: Optionally save it to a file to share.
+
+### Darken the sky and lift the subject
+
+Local adjustments on the selected photos, as two masks.
+
+1. `develop.mask.add` `{"shape":{"type":"segment","target":"sky"},"adjustments":{"exposure":-0.7,"highlights":-40,"saturation":15}}`: Detects the sky in each photo; returns the mask id.
+2. `develop.mask.add` `{"shape":{"type":"segment","target":"subject"},"adjustments":{"exposure":0.4,"shadows":25}}`: A second mask for the subject.
+3. `library.photos.view` `{"photoIds":["DSC_0001.jpg"],"size":"preview"}`: Look at the result; then refine with develop.mask.update using the returned ids.
 
 ### Edit one photo, then match the rest
 
@@ -1125,6 +1135,176 @@ Examples:
 - `{}`: Toggle the straighten tool.
 - `{"on":false}`: Disarm it.
 
+#### Add Mask: `develop.mask.add`
+
+Command, undoable
+
+Add a mask to the selected photos: an area with its own adjustments on top of the photo's settings. Shapes: linear gradient (from/to points), radial gradient (centre, radii, angle, feather), luminance range (low–high brightness of the original photo), colour range (a hue), or segment (sky, subject, background, people, vegetation or water, detected by an in-browser model). Points and radii are fractions of the photo's width and height, placed on the uncropped photo. Give the adjustments now or change them later with develop.mask.update (sliders add to the photo's: exposure -1 inside the mask darkens it by a stop). Up to 8 masks per photo. Returns the new mask's id (the same id on every photo), and selects it in the Develop panel.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `shape` | any | yes | The area a mask covers. |
+| `adjustments` | object | no | Adjustments to change inside the mask; anything omitted is left as it is. |
+| `name` | string | no | A name for the panel; defaults to one from the shape. |
+| `invert` | boolean | no | Apply outside the area instead of inside. |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"shape":{"type":"segment","target":"sky"},"adjustments":{"exposure":-0.7,"highlights":-40,"saturation":15}}`: Darken and deepen the sky.
+- `{"shape":{"type":"segment","target":"subject"},"adjustments":{"exposure":0.4,"shadows":30}}`: Lift the subject.
+- `{"shape":{"type":"linear","from":{"x":0.5,"y":0},"to":{"x":0.5,"y":0.5}},"adjustments":{"exposure":-1}}`: A graduated filter darkening the top half.
+- `{"shape":{"type":"radial","center":{"x":0.5,"y":0.45},"radiusX":0.3,"radiusY":0.4,"angle":0,"feather":60},"invert":true,"adjustments":{"exposure":-0.6}}`: Darken everything around the centre (a custom vignette).
+- `{"shape":{"type":"luminance","low":0,"high":30,"feather":15},"adjustments":{"shadows":40,"temperature":10}}`: Lift and warm the shadows only.
+- `{"shape":{"type":"color","hue":210,"range":50,"feather":50},"adjustments":{"saturation":-40}}`: Mute the blues.
+
+#### Add Default Mask: `develop.mask.addDefault`
+
+Command, undoable
+
+Add a mask with a standard shape to the selected photos: a linear gradient over the top, a radial gradient in the middle, a shadows luminance range, a blue colour range, or a segment of the given target. Then adjust it with develop.mask.update. Returns the mask id.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `type` | `"linear"` \| `"radial"` \| `"luminance"` \| `"color"` \| `"segment"` | yes | The shape type. |
+| `target` | `"subject"` \| `"sky"` \| `"background"` \| `"people"` \| `"vegetation"` \| `"water"` | no | For segment masks: what to detect (default subject). |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"type":"segment","target":"sky"}`: A sky mask, ready for adjustments.
+- `{"type":"radial"}`: An ellipse in the middle of the photo.
+
+#### Draw Mask: `develop.mask.draw`
+
+Command
+
+Arm the mask tool in Loupe or Develop so the next drag over the photo draws a new linear or radial gradient mask (a drag from where it is fully on to where it fades out, or from the centre of the ellipse to its edge). Dispatching the same shape again, or null, disarms it.
+
+*Available only when the current view is Loupe or Develop and a photo is active.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `shape` | any | yes | Which gradient to draw, or null to disarm. |
+
+Examples:
+
+- `{"shape":"linear"}`: Draw a graduated filter.
+- `{"shape":null}`: Disarm.
+
+#### Duplicate Mask: `develop.mask.duplicate`
+
+Command, undoable
+
+Copy a mask (shape and adjustments) on the selected photos, as a new mask with its own id. Returns the new id.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `maskId` | string | yes | The mask's id (from develop.mask.add or develop.settings.get). |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"maskId":"m1a2b3c"}`: Duplicate the mask, then move or invert the copy.
+
+#### Remove Mask: `develop.mask.remove`
+
+Command, undoable
+
+Remove a mask from the selected photos (undoable). To reset a mask's adjustments but keep its shape, use develop.mask.reset.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `maskId` | string | yes | The mask's id (from develop.mask.add or develop.settings.get). |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"maskId":"m1a2b3c"}`: Remove the mask.
+
+#### Reset Mask Adjustments: `develop.mask.reset`
+
+Command, undoable
+
+Set a mask's adjustments back to nothing (its shape stays) on the selected photos.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `maskId` | string | yes | The mask's id (from develop.mask.add or develop.settings.get). |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"maskId":"m1a2b3c"}`: Clear the mask's adjustments.
+
+#### Select Mask: `develop.mask.select`
+
+Command
+
+Choose which of the active photo's masks the Develop panel edits and the photo shows handles for (null: none). Not undoable.
+
+*Available only when a photo is active.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `maskId` | any | yes | The mask to edit, or null for none. |
+
+Examples:
+
+- `{"maskId":"m1a2b3c"}`: Edit this mask.
+- `{"maskId":null}`: Leave mask editing.
+
+#### Edit Mask: `develop.mask.update`
+
+Command, undoable
+
+Change a mask on the selected photos: its adjustments (sliders, tone curve, HSL; only the given ones change), its shape (replaced whole, same or different type), name, enabled, or invert. Adjustments are offsets added to the photo's settings inside the mask; 0 is no change.
+
+*Available only when at least one photo is selected.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `maskId` | string | yes | The mask's id (from develop.mask.add or develop.settings.get). |
+| `adjustments` | object | no | Adjustments to change inside the mask; anything omitted is left as it is. |
+| `shape` | any | no | The area a mask covers. |
+| `name` | string | no | A new name. |
+| `enabled` | boolean | no | Turn the mask off (false) or on without removing it. |
+| `invert` | boolean | no | Apply outside the area (true) or inside (false). |
+| `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
+
+Examples:
+
+- `{"maskId":"m1a2b3c","adjustments":{"exposure":-1.2,"contrast":20}}`: Stronger darkening inside the mask.
+- `{"maskId":"m1a2b3c","shape":{"type":"radial","center":{"x":0.6,"y":0.4},"radiusX":0.25,"radiusY":0.3,"angle":0,"feather":70}}`: Move and soften a radial mask.
+- `{"maskId":"m1a2b3c","enabled":false}`: Switch a mask off to compare.
+
+#### Show Mask Overlay: `develop.maskOverlay.toggle`
+
+Command · Shortcuts: `o`
+
+Show or hide the selected mask's coverage painted in red over the photo, in Loupe or Develop.
+
+*Available only when the current view is Loupe or Develop and the active photo has masks.*
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `on` | boolean | no | Show (true) or hide (false); omit to toggle. |
+
+Examples:
+
+- `{}`: Toggle the red overlay.
+- `{"on":true}`: Show it.
+
 #### Set Profile: `develop.profile.set`
 
 Command, undoable
@@ -1278,7 +1458,7 @@ Reset the selected photos' develop settings to unedited, or only the given group
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Only these groups (profile, wb, basic, presence, effects, toneCurve, hsl, crop). Omit for all. |
+| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"` \| `"masks"`[] | no | Only these groups (profile, wb, basic, presence, effects, toneCurve, hsl, crop, masks). Omit for all. |
 | `photoIds` | string[] | no | Photos to change. Omit to use the current selection. |
 
 Examples:
@@ -1290,7 +1470,7 @@ Examples:
 
 Command, undoable
 
-Apply several develop settings at once to the selected photos (a look or preset): any Basic sliders, tone curve, HSL bands, crop. Values replace the current ones; omitted settings are unchanged.
+Apply several develop settings at once to the selected photos (a look or preset): any Basic sliders, tone curve, HSL bands, crop, masks. Values replace the current ones; omitted settings are unchanged.
 
 *Available only when at least one photo is selected.*
 
@@ -1314,7 +1494,7 @@ Copy the active photo's develop settings (by default everything except crop) to 
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: profile, wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop. |
+| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"` \| `"masks"`[] | no | Settings groups: profile, wb, basic, presence, effects, toneCurve, hsl, crop, masks. Defaults to everything except crop. |
 
 Examples:
 
@@ -1325,7 +1505,7 @@ Examples:
 
 Query (no side effects)
 
-Return a photo's full develop settings (the active photo by default) and whether it has been edited.
+Return a photo's full develop settings (the active photo by default), including its masks and their ids, and whether it has been edited.
 
 *Always available.*
 
@@ -1363,7 +1543,7 @@ Copy the active photo's develop settings to every other selected photo (by defau
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"`[] | no | Settings groups: profile, wb, basic, presence, effects, toneCurve, hsl, crop. Defaults to everything except crop. |
+| `groups` | `"profile"` \| `"wb"` \| `"basic"` \| `"presence"` \| `"effects"` \| `"toneCurve"` \| `"hsl"` \| `"crop"` \| `"masks"`[] | no | Settings groups: profile, wb, basic, presence, effects, toneCurve, hsl, crop, masks. Defaults to everything except crop. |
 
 Examples:
 
@@ -1450,6 +1630,15 @@ Right-click on a photo in the grid or filmstrip. Acts on the selection (the clic
     - Selenium: `develop.profile.set` `{"profileId":"builtin.selenium"}`
     - Sepia: `develop.profile.set` `{"profileId":"builtin.sepia"}`
     - None: `develop.profile.set` `{"profileId":"none"}`
+  - Add Mask
+    - Sky: `develop.mask.addDefault` `{"type":"segment","target":"sky"}`
+    - Subject: `develop.mask.addDefault` `{"type":"segment","target":"subject"}`
+    - Background: `develop.mask.addDefault` `{"type":"segment","target":"background"}`
+    - People: `develop.mask.addDefault` `{"type":"segment","target":"people"}`
+    - Linear Gradient: `develop.mask.addDefault` `{"type":"linear"}`
+    - Radial Gradient: `develop.mask.addDefault` `{"type":"radial"}`
+    - Luminance Range: `develop.mask.addDefault` `{"type":"luminance"}`
+    - Colour Range: `develop.mask.addDefault` `{"type":"color"}`
   - Sync Settings: `develop.settings.sync`
   - Reset Develop Settings: `develop.reset`
 - Export JPEG…: `develop.export`
@@ -1499,6 +1688,15 @@ Right-click on the photo in Loupe or Develop.
     - Selenium: `develop.profile.set` `{"profileId":"builtin.selenium"}`
     - Sepia: `develop.profile.set` `{"profileId":"builtin.sepia"}`
     - None: `develop.profile.set` `{"profileId":"none"}`
+  - Add Mask
+    - Sky: `develop.mask.addDefault` `{"type":"segment","target":"sky"}`
+    - Subject: `develop.mask.addDefault` `{"type":"segment","target":"subject"}`
+    - Background: `develop.mask.addDefault` `{"type":"segment","target":"background"}`
+    - People: `develop.mask.addDefault` `{"type":"segment","target":"people"}`
+    - Linear Gradient: `develop.mask.addDefault` `{"type":"linear"}`
+    - Radial Gradient: `develop.mask.addDefault` `{"type":"radial"}`
+    - Luminance Range: `develop.mask.addDefault` `{"type":"luminance"}`
+    - Colour Range: `develop.mask.addDefault` `{"type":"color"}`
   - Sync Settings: `develop.settings.sync`
   - Reset Develop Settings: `develop.reset`
 - Export JPEG…: `develop.export`

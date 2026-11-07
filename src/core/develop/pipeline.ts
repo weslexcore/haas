@@ -1,4 +1,5 @@
-import { HSL_BANDS, type EditRecipe, type RecipeProfile } from "./recipe";
+import { hasAdjustments, maskWeight, type MaskBitmaps } from "./masks";
+import { HSL_BANDS, MASK_SLIDER_NAMES, SLIDERS, type EditRecipe, type Mask, type MaskSliderName, type RecipeProfile } from "./recipe";
 import { curveLut, sampleLut } from "./tone-curve";
 
 /**
@@ -6,6 +7,9 @@ import { curveLut, sampleLut } from "./tone-curve";
  * (adapters/render/shaders.ts) implements exactly these formulas; tests render
  * on the GPU and compare against `processPixel`.
  *
+ *  0. masks: each mask's coverage of the pixel (core/develop/masks.ts); the
+ *     Basic sliders become per-pixel values (global + Σ coverage × mask's),
+ *     clamped to the slider ranges, and the tone curve and HSL bands likewise
  *  1. sRGB → linear
  *  2. white balance gains (luminance-normalized), exposure (×2^EV)
  *  3. tone, on perceptual luminance (L^(1/2.2)) with RGB scaled by the luminance
@@ -22,7 +26,11 @@ export const LUMA = [0.2126, 0.7152, 0.0722] as const;
 /** Band centres in turns (fractions of the hue circle). */
 export const BAND_CENTERS = [0, 30, 60, 120, 180, 240, 270, 300].map((d) => d / 360);
 
-export interface DevelopUniforms {
+/** The Basic sliders in recipe units (the shader works from these, so masks can shift them per pixel). */
+export type Sliders = Record<MaskSliderName, number>;
+
+/** The Basic sliders turned into the pipeline's own units. */
+export interface ToneParams {
   wbGains: [number, number, number];
   exposure: number;
   blackPoint: number;
@@ -32,6 +40,29 @@ export interface DevelopUniforms {
   contrast: number;
   vibrance: number;
   saturation: number;
+}
+
+export interface MaskUniforms {
+  mask: Mask;
+  /** The mask's slider offsets, recipe units. */
+  sliders: Sliders;
+  /** Its tone curve as a lookup table, or null when it is the identity. */
+  curve: Uint8Array | null;
+  /** Its HSL offsets, pipeline units, or null when all zero. */
+  hsl: HslArrays | null;
+  /** Disabled masks (and ones with nothing to adjust) are uploaded for the overlay but change nothing. */
+  active: boolean;
+}
+
+export interface HslArrays {
+  hue: number[];
+  sat: number[];
+  lum: number[];
+}
+
+export interface DevelopUniforms extends ToneParams {
+  /** The global Basic sliders, recipe units. */
+  sliders: Sliders;
   /** -1 (black corners) to 1 (white corners). */
   vignette: number;
   hslHue: number[];
@@ -40,6 +71,7 @@ export interface DevelopUniforms {
   curve: Uint8Array;
   /** Null when the recipe has no profile (the stage is skipped). */
   profile: ProfileUniforms | null;
+  masks: MaskUniforms[];
 }
 
 export interface ProfileUniforms {
@@ -72,23 +104,57 @@ export function wbGains(temperature: number, tint: number): [number, number, num
   return [raw[0] / y, raw[1] / y, raw[2] / y];
 }
 
-export function uniformsFor(r: EditRecipe): DevelopUniforms {
+export function toneParams(s: Sliders): ToneParams {
   return {
-    wbGains: wbGains(r.temperature, r.tint),
-    exposure: 2 ** r.exposure,
-    blackPoint: (-r.blacks / 100) * 0.15,
-    whitePoint: 1 - (r.whites / 100) * 0.15,
-    shadows: r.shadows / 100,
-    highlights: r.highlights / 100,
-    contrast: (r.contrast / 100) * 0.8,
-    vibrance: r.vibrance / 100,
-    saturation: r.saturation / 100,
+    wbGains: wbGains(s.temperature, s.tint),
+    exposure: 2 ** s.exposure,
+    blackPoint: (-s.blacks / 100) * 0.15,
+    whitePoint: 1 - (s.whites / 100) * 0.15,
+    shadows: s.shadows / 100,
+    highlights: s.highlights / 100,
+    contrast: (s.contrast / 100) * 0.8,
+    vibrance: s.vibrance / 100,
+    saturation: s.saturation / 100,
+  };
+}
+
+const slidersOf = (r: Record<MaskSliderName, number>): Sliders => Object.fromEntries(MASK_SLIDER_NAMES.map((n) => [n, r[n]])) as Sliders;
+
+const isIdentityCurve = (c: ReadonlyArray<readonly [number, number]>) => c.length === 2 && c[0]![0] === 0 && c[0]![1] === 0 && c[1]![0] === 1 && c[1]![1] === 1;
+
+function hslArrays(hsl: EditRecipe["hsl"]): HslArrays {
+  return {
+    hue: HSL_BANDS.map((b) => ((hsl.hue[b] / 100) * 30) / 360),
+    sat: HSL_BANDS.map((b) => hsl.saturation[b] / 100),
+    lum: HSL_BANDS.map((b) => hsl.luminance[b] / 100),
+  };
+}
+
+export function maskUniforms(mask: Mask): MaskUniforms {
+  const a = mask.adjustments;
+  const hsl = hslArrays(a.hsl);
+  return {
+    mask,
+    sliders: slidersOf(a),
+    curve: isIdentityCurve(a.toneCurve) ? null : curveLut(a.toneCurve),
+    hsl: HSL_BANDS.some((b) => a.hsl.hue[b] !== 0 || a.hsl.saturation[b] !== 0 || a.hsl.luminance[b] !== 0) ? hsl : null,
+    active: mask.enabled && hasAdjustments(mask),
+  };
+}
+
+export function uniformsFor(r: EditRecipe): DevelopUniforms {
+  const sliders = slidersOf(r);
+  const hsl = hslArrays(r.hsl);
+  return {
+    ...toneParams(sliders),
+    sliders,
     vignette: r.vignette / 100,
-    hslHue: HSL_BANDS.map((b) => ((r.hsl.hue[b] / 100) * 30) / 360),
-    hslSat: HSL_BANDS.map((b) => r.hsl.saturation[b] / 100),
-    hslLum: HSL_BANDS.map((b) => r.hsl.luminance[b] / 100),
+    hslHue: hsl.hue,
+    hslSat: hsl.sat,
+    hslLum: hsl.lum,
     curve: curveLut(r.toneCurve),
     profile: r.profile ? profileUniforms(r.profile) : null,
+    masks: (r.masks ?? []).map(maskUniforms),
   };
 }
 
@@ -203,7 +269,7 @@ export const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.0
 export const linearToSrgb = (c: number) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 
 /** Tone mapping of perceptual luminance. Values above 1 (blown highlights) are carried through. */
-export function tone(pl: number, u: DevelopUniforms): number {
+export function tone(pl: number, u: ToneParams, curve: (x: number) => number): number {
   let x = (pl - u.blackPoint) / (u.whitePoint - u.blackPoint);
   let xc = clamp(x);
   x += u.shadows * 1.2 * xc * (1 - xc) * (1 - xc);
@@ -219,7 +285,7 @@ export function tone(pl: number, u: DevelopUniforms): number {
   const s = xc < 0.5 ? 0.5 * (2 * xc) ** e : 1 - 0.5 * (2 * (1 - xc)) ** e;
   x = s + (x - xc);
   xc = clamp(x);
-  return sampleLut(u.curve, xc) + (x - xc);
+  return curve(xc) + (x - xc);
 }
 
 export function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
@@ -253,7 +319,7 @@ export function hslToRgb(h: number, s: number, l: number): [number, number, numb
 }
 
 /** Interpolated per-band adjustment at hue h (turns): [hue, sat, lum]. */
-export function bandAdjust(h: number, u: DevelopUniforms): [number, number, number] {
+export function bandAdjust(h: number, hsl: HslArrays): [number, number, number] {
   for (let i = 0; i < 8; i++) {
     const a = BAND_CENTERS[i]!;
     const b = i === 7 ? 1 : BAND_CENTERS[i + 1]!;
@@ -261,24 +327,77 @@ export function bandAdjust(h: number, u: DevelopUniforms): [number, number, numb
       const t = (h - a) / (b - a);
       const j = (i + 1) % 8;
       const mix = (arr: number[]) => arr[i]! + (arr[j]! - arr[i]!) * t;
-      return [mix(u.hslHue), mix(u.hslSat), mix(u.hslLum)];
+      return [mix(hsl.hue), mix(hsl.sat), mix(hsl.lum)];
     }
   }
-  return [u.hslHue[0]!, u.hslSat[0]!, u.hslLum[0]!];
+  return [hsl.hue[0]!, hsl.sat[0]!, hsl.lum[0]!];
+}
+
+/** The pipeline's per-pixel parameters: the global ones, shifted by the masks covering the pixel. */
+interface LocalParams {
+  tone: ToneParams;
+  curve: (x: number) => number;
+  hsl: HslArrays;
+}
+
+/**
+ * Parameters at a pixel from each mask's coverage (`weights[i]` for
+ * `u.masks[i]`, 0–1, inversion already applied). Sliders add up in recipe
+ * units and are clamped to their ranges; each mask's curve adds its offset
+ * from the identity; HSL offsets add.
+ */
+export function localParams(u: DevelopUniforms, weights: ArrayLike<number>): LocalParams {
+  const sliders = { ...u.sliders };
+  const curves: Array<{ w: number; lut: Uint8Array }> = [];
+  let hsl: HslArrays | null = null;
+  let changed = false;
+  for (let i = 0; i < u.masks.length; i++) {
+    const m = u.masks[i]!;
+    const w = weights[i] ?? 0;
+    if (!m.active || w <= 0) continue;
+    changed = true;
+    for (const n of MASK_SLIDER_NAMES) sliders[n] += w * m.sliders[n];
+    if (m.curve) curves.push({ w, lut: m.curve });
+    if (m.hsl) {
+      hsl ??= { hue: [...u.hslHue], sat: [...u.hslSat], lum: [...u.hslLum] };
+      for (let b = 0; b < 8; b++) {
+        hsl.hue[b]! += w * m.hsl.hue[b]!;
+        hsl.sat[b]! += w * m.hsl.sat[b]!;
+        hsl.lum[b]! += w * m.hsl.lum[b]!;
+      }
+    }
+  }
+  if (!changed) return { tone: u, curve: (x) => sampleLut(u.curve, x), hsl: { hue: u.hslHue, sat: u.hslSat, lum: u.hslLum } };
+  for (const n of MASK_SLIDER_NAMES) sliders[n] = clamp(sliders[n], SLIDERS[n].min, SLIDERS[n].max);
+  return {
+    tone: toneParams(sliders),
+    curve: curves.length
+      ? (x) => {
+          let y = sampleLut(u.curve, x);
+          for (const c of curves) y += c.w * (sampleLut(c.lut, x) - x);
+          return clamp(y);
+        }
+      : (x) => sampleLut(u.curve, x),
+    hsl: hsl ?? { hue: u.hslHue, sat: u.hslSat, lum: u.hslLum },
+  };
 }
 
 /**
  * Process one sRGB pixel (0–1 per channel). `mask` is the pixel's
- * `vignetteMask` and `noise` its `grainNoise`.
+ * `vignetteMask`, `noise` its `grainNoise`, and `weights` each mask's
+ * coverage of it (none: the global settings alone).
  */
-export function processPixel(r: number, g: number, b: number, u: DevelopUniforms, mask = 0, noise = 0): [number, number, number] {
-  let lr = srgbToLinear(r) * u.wbGains[0] * u.exposure;
-  let lg = srgbToLinear(g) * u.wbGains[1] * u.exposure;
-  let lb = srgbToLinear(b) * u.wbGains[2] * u.exposure;
+export function processPixel(r: number, g: number, b: number, u: DevelopUniforms, mask = 0, noise = 0, weights?: ArrayLike<number>): [number, number, number] {
+  const local = weights ? localParams(u, weights) : null;
+  const t: ToneParams = local ? local.tone : u;
+  const curve = local ? local.curve : (x: number) => sampleLut(u.curve, x);
+  let lr = srgbToLinear(r) * t.wbGains[0] * t.exposure;
+  let lg = srgbToLinear(g) * t.wbGains[1] * t.exposure;
+  let lb = srgbToLinear(b) * t.wbGains[2] * t.exposure;
 
   const L = lr * LUMA[0] + lg * LUMA[1] + lb * LUMA[2];
   const pl = Math.max(L, 0) ** (1 / 2.2);
-  const L2 = Math.max(tone(pl, u), 0) ** 2.2;
+  const L2 = Math.max(tone(pl, t, curve), 0) ** 2.2;
   if (L > 1e-5) {
     const k = L2 / L;
     lr *= k;
@@ -308,37 +427,48 @@ export function processPixel(r: number, g: number, b: number, u: DevelopUniforms
   if (u.profile) [sr, sg, sb] = profilePixel(sr, sg, sb, u.profile, noise);
 
   let [h, s, l] = rgbToHsl(sr, sg, sb);
-  const [dh, ds, dl] = bandAdjust(h, u);
+  const [dh, ds, dl] = bandAdjust(h, local ? local.hsl : { hue: u.hslHue, sat: u.hslSat, lum: u.hslLum });
   const s0 = s;
   h = h + dh;
   h -= Math.floor(h);
   s *= 1 + ds;
   l += dl * 0.3 * s0;
-  s *= 1 + u.vibrance * (1 - clamp(s));
-  s *= 1 + u.saturation;
+  s *= 1 + t.vibrance * (1 - clamp(s));
+  s *= 1 + t.saturation;
   return hslToRgb(h, clamp(s), clamp(l));
+}
+
+/** Each mask's coverage of a source pixel: (u, v) in source uv, (r, g, b) the original sRGB pixel. */
+export function maskWeights(u: DevelopUniforms, su: number, sv: number, rgb: readonly [number, number, number], aspect: number, bitmaps?: MaskBitmaps): number[] {
+  return u.masks.map((m) => maskWeight(m.mask, su, sv, rgb, aspect, bitmaps?.[m.mask.id]));
 }
 
 /**
  * Apply the pipeline to RGBA8 pixels in place (CPU reference; also used for
- * tests). The pixels are taken to be the whole cropped frame, `width` across,
- * and (for grain) the uncropped source; without a width the vignette and
- * grain are skipped.
+ * tests). The pixels are taken to be the whole, uncropped photo, `width`
+ * across (so source and output positions coincide); without a width the
+ * vignette, grain and masks are skipped. `bitmaps` supplies segment masks.
  */
-export function processImageData(data: Uint8ClampedArray | Uint8Array, recipe: EditRecipe, width?: number): void {
+export function processImageData(data: Uint8ClampedArray | Uint8Array, recipe: EditRecipe, width?: number, bitmaps?: MaskBitmaps): void {
   const u = uniformsFor(recipe);
   const height = width ? data.length / 4 / width : 0;
   const grain = width && u.profile && u.profile.grain > 0 ? u.profile.grainCells : 0;
+  const masked = !!width && u.masks.some((m) => m.active);
+  const aspect = width ? width / height : 1;
   for (let i = 0; i < data.length; i += 4) {
     const px = i / 4;
     const x = width ? ((px % width) + 0.5) / width : 0;
     const y = width ? (Math.floor(px / width) + 0.5) / height : 0;
     const mask = width && u.vignette !== 0 ? vignetteMask(x, y) : 0;
-    const noise = grain ? grainNoise(x, y, width! / height, grain) : 0;
-    const [r, g, b] = processPixel(data[i]! / 255, data[i + 1]! / 255, data[i + 2]! / 255, u, mask, noise);
-    data[i] = Math.round(r * 255);
-    data[i + 1] = Math.round(g * 255);
-    data[i + 2] = Math.round(b * 255);
+    const noise = grain ? grainNoise(x, y, aspect, grain) : 0;
+    const r = data[i]! / 255;
+    const g = data[i + 1]! / 255;
+    const b = data[i + 2]! / 255;
+    const weights = masked ? maskWeights(u, x, y, [r, g, b], aspect, bitmaps) : undefined;
+    const [or, og, ob] = processPixel(r, g, b, u, mask, noise, weights);
+    data[i] = Math.round(or * 255);
+    data[i + 1] = Math.round(og * 255);
+    data[i + 2] = Math.round(ob * 255);
   }
 }
 

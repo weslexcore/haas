@@ -8,6 +8,7 @@ import { ActionButton } from "../shell/ActionButton";
 import { Kbd } from "../shell/Kbd";
 import { CurveEditor, HistogramView, Section, Slider } from "./controls";
 import styles from "./DevelopPanel.module.css";
+import { MaskSection } from "./MaskPanel";
 import { ProfileSection } from "./ProfilePanel";
 
 const TRACKS: Partial<Record<SliderName, string>> = {
@@ -139,6 +140,8 @@ export function DevelopPanel({ photo, histogram }: { photo: PhotoRecord; histogr
       >
         {slider("vignette")}
       </Section>
+
+      <MaskSection photo={photo} recipe={recipe} />
 
       <Section title="Crop & Straighten" defaultOpen={cropTool}>
         <Slider

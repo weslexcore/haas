@@ -45,6 +45,8 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
+      // ONNX Runtime (12 MB) is only fetched when a segment mask is first used; it is far too big to precache.
+      workbox: { globIgnores: ["**/ort-wasm-*"] },
       manifest: {
         name: "Photon",
         short_name: "Photon",
