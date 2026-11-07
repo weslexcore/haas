@@ -480,17 +480,22 @@ export const toggleLevelTool = defineAction({
 
 // ── Export ───────────────────────────────────────────────────────────────
 
+export const exporting = when("an export is running", (ctx) => ctx.state.develop.exportJob !== null);
+const notExporting = when("no export is running", (ctx) => !exporting.test(ctx));
+
 export const exportJpeg = defineAction({
   id: "develop.export",
   sideEffects: true,
   title: "Export JPEG",
   description:
-    "Render the selected photos with their edits at full resolution (or limited to maxEdge pixels on the long " +
-    "side) and save them as JPEGs: into the folder's _Exports subfolder when it is writable, otherwise as " +
-    "downloads. Originals are untouched; existing exports are never overwritten.",
+    "Render the selected photos (one or many) with their edits at full resolution (or limited to maxEdge pixels " +
+    "on the long side) and save them as JPEGs: into the folder's _Exports subfolder when it is writable, " +
+    "otherwise as downloads. Photos are written one after another, with progress shown in the status bar; " +
+    "develop.export.cancel stops after the current photo. Originals are untouched; existing exports are never " +
+    "overwritten. Only one export runs at a time.",
   category: "Develop",
   kind: "command",
-  when: hasSelection,
+  when: all(hasSelection, notExporting),
   params: z
     .object({
       quality: z.number().min(0.3).max(1).optional().describe("JPEG quality, 0.3–1 (default 0.9)."),
@@ -514,26 +519,83 @@ export const exportJpeg = defineAction({
 
     const files: Array<{ photoId: string; path: string; width: number; height: number }> = [];
     const failed: Array<{ path: string; error: string }> = [];
-    for (const id of ids) {
-      const photo = ctx.state.photos.byId[id]!;
-      try {
-        const image = await ctx.services.previews.decode(photo);
-        if (!image) throw new Error("Can't decode this photo");
-        const { blob, width, height } = await ctx.services.exporter.renderJpeg(image, editOf(photo), {
-          quality,
-          ...(p?.maxEdge ? { maxEdge: p.maxEdge } : {}),
+    let cancelled = false;
+    // Decode the next photo while the current one renders: at most two full-size images at a time.
+    const decode = (id: string) => ctx.services.previews.decode(ctx.state.photos.byId[id]!).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+    const discard = async (pending: ReturnType<typeof decode> | null) => {
+      const image = await pending;
+      if (image && !(image instanceof Error)) image.close();
+    };
+
+    ctx.update((s) => {
+      s.develop.exportJob = { done: 0, total: ids.length, failed: 0, cancelRequested: false };
+    });
+    let next: ReturnType<typeof decode> | null = ids.length ? decode(ids[0]!) : null;
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        if (ctx.state.develop.exportJob?.cancelRequested) {
+          cancelled = true;
+          await discard(next);
+          break;
+        }
+        const id = ids[i]!;
+        const pending = next!;
+        next = i + 1 < ids.length ? decode(ids[i + 1]!) : null;
+        try {
+          const image = await pending;
+          if (image instanceof Error) throw image;
+          if (!image) throw new Error("Can't decode this photo");
+          // Read the photo now, not before the await: its edit may have changed, or it may be gone.
+          const photo = ctx.state.photos.byId[id];
+          if (!photo) {
+            image.close();
+            throw new Error("This photo is no longer in the library");
+          }
+          let rendered: { blob: Blob; width: number; height: number };
+          try {
+            rendered = await ctx.services.exporter.renderJpeg(image, editOf(photo), {
+              quality,
+              ...(p?.maxEdge ? { maxEdge: p.maxEdge } : {}),
+            });
+          } finally {
+            image.close();
+          }
+          const name = `${baseName(photo.id)}.jpg`;
+          let path = name;
+          if (destination === "folder") path = await source!.writeExport(name, rendered.blob);
+          else ctx.services.downloads.saveBlob(name, rendered.blob);
+          files.push({ photoId: id, path, width: rendered.width, height: rendered.height });
+        } catch (e) {
+          failed.push({ path: id, error: e instanceof Error ? e.message : String(e) });
+        }
+        ctx.update((s) => {
+          if (!s.develop.exportJob) return;
+          s.develop.exportJob.done = i + 1;
+          s.develop.exportJob.failed = failed.length;
         });
-        image.close();
-        const name = `${baseName(photo.id)}.jpg`;
-        let path = name;
-        if (destination === "folder") path = await source!.writeExport(name, blob);
-        else ctx.services.downloads.saveBlob(name, blob);
-        files.push({ photoId: id, path, width, height });
-      } catch (e) {
-        failed.push({ path: id, error: e instanceof Error ? e.message : String(e) });
       }
+    } finally {
+      ctx.update((s) => {
+        s.develop.exportJob = null;
+      });
     }
-    return { exported: files.length, destination, files, failed };
+    return { exported: files.length, total: ids.length, destination, files, failed, cancelled };
+  },
+});
+
+export const cancelExport = defineAction({
+  id: "develop.export.cancel",
+  title: "Cancel Export",
+  description:
+    "Stop the export that is running, once the photo being written has finished. Photos exported so far are kept; " +
+    "the rest are skipped.",
+  category: "Develop",
+  kind: "command",
+  when: exporting,
+  run(_, ctx) {
+    ctx.update((s) => {
+      if (s.develop.exportJob) s.develop.exportJob.cancelRequested = true;
+    });
   },
 });
 
@@ -553,4 +615,5 @@ export const developActions = [
   toggleLevelTool,
   toggleCropTool,
   exportJpeg,
+  cancelExport,
 ];

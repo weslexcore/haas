@@ -1,11 +1,11 @@
 import { useRef, useState, type PointerEvent } from "react";
-import { rotateByDrag, type Point, type Size } from "../../core/develop/crop";
+import { resizeCrop, rotateByDrag, type CropHandle, type Point, type Size } from "../../core/develop/crop";
 import type { CropRect } from "../../core/develop/recipe";
 import { useRuntime } from "../runtime-context";
 import styles from "./CropOverlay.module.css";
 
-type Handle = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
-const HANDLES: Exclude<Handle, "move">[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+type Handle = "move" | CropHandle;
+const HANDLES: CropHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
 type Drag =
   | { kind: "resize"; handle: Handle; start: Point; crop: CropRect }
@@ -14,7 +14,8 @@ type Drag =
 
 /**
  * Crop rectangle over the whole straightened frame:
- * - drag inside to move it, drag the handles to resize;
+ * - drag inside to move it, drag the handles to resize (hold Shift to keep
+ *   the aspect ratio);
  * - drag outside it (on the photo or the margin around it) to rotate;
  * - ⌘/Ctrl-drag, or drag with the straighten tool armed, to draw a line
  *   along a horizon and level the photo to it.
@@ -25,6 +26,8 @@ export function CropOverlay({ crop, display, levelTool }: { crop: CropRect; disp
   const runtime = useRuntime();
   const drag = useRef<Drag | null>(null);
   const [rotating, setRotating] = useState(false);
+  /** Resizing with Shift held: the hint says the shape is kept. */
+  const [locked, setLocked] = useState(false);
   const [line, setLine] = useState<{ from: Point; to: Point } | null>(null);
   const dispatch = (id: string, params: unknown) => void runtime.dispatch(id, params, { source: "ui" });
 
@@ -69,19 +72,13 @@ export function CropOverlay({ crop, display, levelTool }: { crop: CropRect; disp
     const dx = (p.x - d.start.x) / display.width;
     const dy = (p.y - d.start.y) / display.height;
     let { x, y, width, height } = d.crop;
-    const right = x + width;
-    const bottom = y + height;
-    const h = d.handle;
-    if (h === "move") {
+    if (d.handle === "move") {
       x = Math.min(1 - width, Math.max(0, x + dx));
       y = Math.min(1 - height, Math.max(0, y + dy));
     } else {
-      if (h.includes("w")) x = Math.min(right - 0.02, Math.max(0, x + dx));
-      if (h.includes("e")) width = Math.min(1 - x, Math.max(0.02, width + dx));
-      if (h.includes("n")) y = Math.min(bottom - 0.02, Math.max(0, y + dy));
-      if (h.includes("s")) height = Math.min(1 - y, Math.max(0.02, height + dy));
-      if (h.includes("w")) width = right - x;
-      if (h.includes("n")) height = bottom - y;
+      // Shift (read on every move, so it can be pressed or released mid-drag) keeps the shape.
+      setLocked(e.shiftKey);
+      ({ x, y, width, height } = resizeCrop(d.crop, d.handle, dx, dy, e.shiftKey));
     }
     dispatch("develop.crop.set", { x, y, width, height });
   };
@@ -90,6 +87,7 @@ export function CropOverlay({ crop, display, levelTool }: { crop: CropRect; disp
     const d = drag.current;
     drag.current = null;
     setRotating(false);
+    setLocked(false);
     if (d?.kind !== "level") return;
     setLine(null);
     const to = pointOf(e);
@@ -125,7 +123,7 @@ export function CropOverlay({ crop, display, levelTool }: { crop: CropRect; disp
         </svg>
       )}
       <p className={styles.hint} role="status">
-        {levelTool ? "Draw a line along the horizon or a vertical edge" : rotating ? `${crop.angle > 0 ? "+" : ""}${crop.angle.toFixed(1)}°` : ""}
+        {levelTool ? "Draw a line along the horizon or a vertical edge" : rotating ? `${crop.angle > 0 ? "+" : ""}${crop.angle.toFixed(1)}°` : locked ? "Aspect ratio locked" : ""}
       </p>
     </div>
   );

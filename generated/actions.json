@@ -2682,7 +2682,7 @@
     {
       "id": "develop.export",
       "title": "Export JPEG",
-      "description": "Render the selected photos with their edits at full resolution (or limited to maxEdge pixels on the long side) and save them as JPEGs: into the folder's _Exports subfolder when it is writable, otherwise as downloads. Originals are untouched; existing exports are never overwritten.",
+      "description": "Render the selected photos (one or many) with their edits at full resolution (or limited to maxEdge pixels on the long side) and save them as JPEGs: into the folder's _Exports subfolder when it is writable, otherwise as downloads. Photos are written one after another, with progress shown in the status bar; develop.export.cancel stops after the current photo. Originals are untouched; existing exports are never overwritten. Only one export runs at a time.",
       "category": "Develop",
       "kind": "command",
       "undoable": false,
@@ -2737,7 +2737,19 @@
           "keys": "mod+shift+e"
         }
       ],
-      "availability": "Available only when at least one photo is selected."
+      "availability": "Available only when at least one photo is selected and no export is running."
+    },
+    {
+      "id": "develop.export.cancel",
+      "title": "Cancel Export",
+      "description": "Stop the export that is running, once the photo being written has finished. Photos exported so far are kept; the rest are skipped.",
+      "category": "Develop",
+      "kind": "command",
+      "undoable": false,
+      "params": null,
+      "examples": [],
+      "defaultShortcuts": [],
+      "availability": "Available only when an export is running."
     },
     {
       "id": "develop.hsl.set",
@@ -4852,6 +4864,11 @@
           ]
         },
         {
+          "kind": "action",
+          "actionId": "develop.export",
+          "label": "Export JPEG…"
+        },
+        {
           "kind": "separator"
         },
         {
@@ -5190,6 +5207,11 @@
               "label": "Reset Develop Settings"
             }
           ]
+        },
+        {
+          "kind": "action",
+          "actionId": "develop.export",
+          "label": "Export JPEG…"
         },
         {
           "kind": "separator"

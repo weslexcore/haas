@@ -1,0 +1,50 @@
+.progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.bar {
+  width: 96px;
+  height: 6px;
+  accent-color: var(--accent);
+}
+
+.text {
+  font-variant-numeric: tabular-nums;
+}
+
+.cancel {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+/* Small screens: a pill above the bottom bar, where the toasts go. */
+.floating {
+  position: fixed;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: calc(112px + env(safe-area-inset-bottom));
+  z-index: var(--z-toast);
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-overlay);
+}
+
+.floating .bar {
+  flex: 1;
+  width: auto;
+}
+
+.floating .cancel {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+}

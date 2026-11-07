@@ -36,10 +36,10 @@ yarn manifest         # regenerate generated/actions.json and generated/SKILL.md
 | `⌘L` / `Ctrl+L` | Clear filter |
 | `⌘⌫` / `Ctrl+Backspace` | Remove rejected photos (moved to `_Rejected/`; restore or delete them from the filter bar) |
 | `\` | Before/after (Develop only) |
-| `R` | Crop & straighten tool (Loupe or Develop): drag outside the crop to rotate, ⌘/Ctrl-drag along a horizon to level it |
+| `R` | Crop & straighten tool (Loupe or Develop): drag outside the crop to rotate, ⌘/Ctrl-drag along a horizon to level it, hold Shift while resizing to keep the aspect ratio |
 | `⌘⇧C` / `⌘⇧V` / `⌘⇧S` | Copy / paste / sync develop settings |
 | `⌘⇧R` | Reset develop settings |
-| `⌘⇧E` | Export JPEG (to `_Exports/`, or downloads for read-only folders) |
+| `⌘⇧E` | Export the selected photos as JPEGs (select several in the Grid, or `⌘A` for all; to `_Exports/`, or downloads for read-only folders). Also in the photo menu and the top bar; the status bar shows progress with a Cancel button |
 | `⌘Z` / `⇧⌘Z` | Undo, redo |
 | `T T` | Toggle light/dark theme (a chord) |
 | `⌘A` | Select all |
@@ -77,7 +77,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 - set `site_url`, `additional_redirect_urls` and the `[auth.webauthn]` relying party to the production domain. Passkeys are bound to `rp_id`, so changing it later makes existing passkeys stop working;
 - enable `[auth.sms]` plus one SMS provider to turn on phone sign-in;
-- set up custom SMTP: Supabase's built-in email sender only allows a few emails an hour.
+- send sign-in emails through [Resend](https://resend.com): Supabase's built-in sender is for testing and only allows a few emails an hour. The settings are ready under `[remotes.production]` in `config.toml`, which `supabase config push` applies to the hosted project only (the local stack keeps catching emails in Mailpit). Add and verify your domain in Resend, create an API key with sending access, set `admin_email` to an address on that domain and `project_id` to the hosted project's ref, then push with the key in the environment: `RESEND_API_KEY=re_… supabase config push`. The key is never committed. Resend's SMTP relay is `smtp.resend.com`, user `resend`, password = the API key, port 465 (or 587 and 2587 for STARTTLS).
 
 Without a URL and key, the dev server skips sign-in (with a console warning) and a production build shows a "Sign-in isn't set up" screen. `VITE_AUTH=off` turns sign-in off; the e2e tests use it.
 

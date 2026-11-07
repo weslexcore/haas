@@ -1064,9 +1064,9 @@ Show or hide the crop & straighten overlay on the active photo in Loupe or Devel
 
 Command · Shortcuts: `mod+shift+e`
 
-Render the selected photos with their edits at full resolution (or limited to maxEdge pixels on the long side) and save them as JPEGs: into the folder's _Exports subfolder when it is writable, otherwise as downloads. Originals are untouched; existing exports are never overwritten.
+Render the selected photos (one or many) with their edits at full resolution (or limited to maxEdge pixels on the long side) and save them as JPEGs: into the folder's _Exports subfolder when it is writable, otherwise as downloads. Photos are written one after another, with progress shown in the status bar; develop.export.cancel stops after the current photo. Originals are untouched; existing exports are never overwritten. Only one export runs at a time.
 
-*Available only when at least one photo is selected.*
+*Available only when at least one photo is selected and no export is running.*
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -1079,6 +1079,14 @@ Examples:
 
 - `{}`: Export the selection at full size.
 - `{"maxEdge":2048,"quality":0.85}`: Smaller copies for sharing.
+
+#### Cancel Export: `develop.export.cancel`
+
+Command
+
+Stop the export that is running, once the photo being written has finished. Photos exported so far are kept; the rest are skipped.
+
+*Available only when an export is running.*
 
 #### Set HSL: `develop.hsl.set`
 
@@ -1444,6 +1452,7 @@ Right-click on a photo in the grid or filmstrip. Acts on the selection (the clic
     - None: `develop.profile.set` `{"profileId":"none"}`
   - Sync Settings: `develop.settings.sync`
   - Reset Develop Settings: `develop.reset`
+- Export JPEG…: `develop.export`
 - Open in Loupe: `view.set` `{"view":"loupe"}`
 - Open in Develop: `view.set` `{"view":"develop"}`
 - Select All: `library.selection.all`
@@ -1492,6 +1501,7 @@ Right-click on the photo in Loupe or Develop.
     - None: `develop.profile.set` `{"profileId":"none"}`
   - Sync Settings: `develop.settings.sync`
   - Reset Develop Settings: `develop.reset`
+- Export JPEG…: `develop.export`
 - Toggle Zoom: `view.zoom.toggle`
 - Toggle Info Overlay: `view.info.toggle`
 - Toggle Filmstrip: `view.filmstrip.toggle`

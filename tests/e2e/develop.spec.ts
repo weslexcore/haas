@@ -112,6 +112,31 @@ test.describe("develop (sample library)", () => {
     await expect.poll(ratio).toBeCloseTo(1.5, 1); // the whole drag was one step
   });
 
+  test("crop tool: Shift while dragging a corner keeps the aspect ratio", async ({ page }) => {
+    const crop = () =>
+      page.evaluate(async () => {
+        const r = (await window.photo!.dispatch("develop.settings.get")) as { value: { settings: { crop: { width: number; height: number } } } };
+        return r.value.settings.crop;
+      });
+    await page.keyboard.press("r");
+    const area = page.getByRole("group", { name: "Crop area" });
+    await expect(area).toBeVisible();
+    const box = (await area.boundingBox())!;
+    // Drag the bottom-right corner up and a little left, with Shift: the corner slides along the diagonal.
+    await page.mouse.move(box.x + box.width, box.y + box.height);
+    await page.mouse.down();
+    await page.keyboard.down("Shift");
+    await page.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.5, { steps: 5 });
+    await expect(page.getByText("Aspect ratio locked")).toBeVisible();
+    await page.mouse.up();
+    await page.keyboard.up("Shift");
+    const c = await crop();
+    // The whole frame is 1×1 in fractions, so the shape stays 1:1: (0.9 + 0.5) / 2 along the diagonal.
+    expect(c.width / c.height).toBeCloseTo(1, 2);
+    expect(c.height).toBeCloseTo(0.7, 1);
+    await expect(page.getByText("Aspect ratio locked")).toBeHidden();
+  });
+
   test("crop tool: drag outside to rotate, ⌘-drag a line to level", async ({ page }) => {
     const angle = () =>
       page.evaluate(async () => {
@@ -307,6 +332,21 @@ test.describe("develop with real files", () => {
     // Exports never show up as photos in the library.
     await page.reload();
     await expect(page.getByRole("list", { name: "Photos" }).getByRole("listitem")).toHaveCount(4);
+  });
+
+  test("bulk export: several selected photos, from the grid's context menu", async ({ page }) => {
+    await openShoot(page);
+    const grid = page.getByRole("list", { name: "Photos" });
+    await grid.getByRole("button", { name: "IMG_0001.jpg", exact: true }).click();
+    await grid.getByRole("button", { name: "IMG_0004.jpg", exact: true }).click({ modifiers: ["Shift"] }); // 0001, 0002, 0004 by capture time
+    await expect(page.getByRole("contentinfo")).toContainText("3 selected");
+    await grid.getByRole("button", { name: "IMG_0002.jpg", exact: true }).click({ button: "right" });
+    await page.getByRole("menu", { name: "Photo" }).getByRole("menuitem", { name: "Export JPEG…" }).click();
+    await expect(page.getByText("Exported 3 photos to the _Exports folder.")).toBeVisible();
+    for (const name of ["IMG_0001.jpg", "IMG_0002.jpg", "IMG_0004.jpg"]) {
+      expect(await measureExport(page, `_Exports/${name}`)).toMatchObject({ type: "image/jpeg" });
+    }
+    await expect(page.getByRole("button", { name: "Cancel Export" })).toHaveCount(0); // progress is gone once done
   });
 
   test("portrait photos export upright", async ({ page }) => {

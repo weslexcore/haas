@@ -29,6 +29,7 @@ export const allMenus: readonly MenuDefinition[] = [
     items: [
       ...culling,
       develop,
+      item("develop.export", undefined, "Export JPEG…"),
       separator,
       item("view.set", { view: "loupe" }, "Open in Loupe"),
       item("view.set", { view: "develop" }, "Open in Develop"),
@@ -46,6 +47,7 @@ export const allMenus: readonly MenuDefinition[] = [
     items: [
       ...culling,
       develop,
+      item("develop.export", undefined, "Export JPEG…"),
       separator,
       item("view.zoom.toggle"),
       item("view.info.toggle"),

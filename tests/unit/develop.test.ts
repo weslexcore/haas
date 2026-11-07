@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applyAffine, constrainCrop, cropForAspect, cropOutputSize, cropToSourceAffine, levelAngle, rotateByDrag } from "../../src/core/develop/crop";
+import { applyAffine, constrainCrop, cropForAspect, cropOutputSize, cropToSourceAffine, levelAngle, resizeCrop, rotateByDrag } from "../../src/core/develop/crop";
 import { processPixel, uniformsFor, vignetteMask, wbGains, LUMA, computeHistogram } from "../../src/core/develop/pipeline";
 import { applyPartial, defaultRecipe, isDefaultRecipe, mergeGroups, normalizeCurve, recipeSchema } from "../../src/core/develop/recipe";
 import { curveLut, monotoneCurve } from "../../src/core/develop/tone-curve";
-import { createTestRuntime } from "./helpers";
+import { createTestRuntime, flush } from "./helpers";
 
 const near = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) < eps;
 
@@ -157,6 +157,60 @@ describe("crop geometry", () => {
     expect(cropOutputSize(src, sq)).toEqual({ width: 2000, height: 2000 });
     expect(sq.x).toBeCloseTo((1 - 2 / 3) / 2);
   });
+
+  describe("resizing by a handle", () => {
+    const start = { x: 0.2, y: 0.2, width: 0.6, height: 0.4, angle: 0 };
+    const shape = (c: { width: number; height: number }) => c.width / c.height;
+
+    it("free: only the dragged edges move, never past the opposite edge or the frame", () => {
+      expect(resizeCrop(start, "e", 0.1, 0.3)).toMatchObject({ x: 0.2, y: 0.2, width: expect.closeTo(0.7), height: 0.4 });
+      expect(resizeCrop(start, "nw", -0.1, -0.1)).toMatchObject({ x: expect.closeTo(0.1), y: expect.closeTo(0.1), width: expect.closeTo(0.7), height: expect.closeTo(0.5) });
+      expect(resizeCrop(start, "e", 0.5, 0)).toMatchObject({ width: expect.closeTo(0.8) }); // stops at the frame edge
+      expect(resizeCrop(start, "w", 0.9, 0)).toMatchObject({ x: expect.closeTo(0.78), width: expect.closeTo(0.02) }); // never inverts
+    });
+
+    it("locked corner: keeps the shape about the opposite corner, sliding along the diagonal", () => {
+      const c = resizeCrop(start, "se", -0.3, -0.05, true);
+      expect(shape(c)).toBeCloseTo(shape(start));
+      expect(c).toMatchObject({ x: 0.2, y: 0.2 }); // the north-west corner stays
+      // The wanted corner (0.3 × 0.35 from the anchor) projected onto the 3:2 diagonal.
+      const t = (0.3 * 1.5 + 0.35) / (1.5 * 1.5 + 1);
+      expect(c.height).toBeCloseTo(t);
+      expect(c.width).toBeCloseTo(t * 1.5);
+      // Moving along the diagonal itself lands the corner on the pointer.
+      expect(resizeCrop(start, "se", 0.15, 0.1, true)).toMatchObject({ width: expect.closeTo(0.75), height: expect.closeTo(0.5) });
+      const nw = resizeCrop(start, "nw", 0.3, 0, true);
+      expect(shape(nw)).toBeCloseTo(shape(start));
+      expect(nw.x + nw.width).toBeCloseTo(0.8); // the south-east corner stays
+      expect(nw.y + nw.height).toBeCloseTo(0.6);
+    });
+
+    it("locked edge: the other dimension scales about its centre", () => {
+      const c = resizeCrop(start, "e", 0.15, 0, true);
+      expect(shape(c)).toBeCloseTo(shape(start));
+      expect(c).toMatchObject({ x: 0.2, width: expect.closeTo(0.75), height: expect.closeTo(0.5) });
+      expect(c.y + c.height / 2).toBeCloseTo(0.4); // same vertical centre
+      const n = resizeCrop(start, "n", 0.4, 0.1, true);
+      expect(n.y + n.height).toBeCloseTo(0.6); // the bottom edge stays
+      expect(n.x + n.width / 2).toBeCloseTo(0.5);
+      expect(n.height).toBeCloseTo(0.3);
+    });
+
+    it("locked: growing stops where either dimension meets the frame, and never collapses", () => {
+      // Dragging the right edge out: the right edge reaches the frame first.
+      const c = resizeCrop(start, "e", 0.9, 0, true);
+      expect(shape(c)).toBeCloseTo(shape(start));
+      expect(c.x + c.width).toBeCloseTo(1);
+      expect(c.height).toBeCloseTo(0.8 / 1.5);
+      expect(c.y + c.height / 2).toBeCloseTo(0.4);
+      // A square near the top: the top edge reaches the frame first (0.2 of room above the centre).
+      const top = resizeCrop({ x: 0.1, y: 0.05, width: 0.3, height: 0.3, angle: 0 }, "e", 0.9, 0, true);
+      expect(top).toMatchObject({ x: 0.1, y: expect.closeTo(0), width: expect.closeTo(0.4), height: expect.closeTo(0.4) });
+      const tiny = resizeCrop(start, "se", -1, -1, true);
+      expect(tiny.height).toBeCloseTo(0.02);
+      expect(shape(tiny)).toBeCloseTo(shape(start));
+    });
+  });
 });
 
 describe("develop actions", () => {
@@ -241,9 +295,61 @@ describe("develop actions", () => {
     const rt = await createTestRuntime();
     await rt.dispatch("develop.adjust", { setting: "exposure", value: 1 });
     const r = await rt.dispatch<{ exported: number; destination: string }>("develop.export", { maxEdge: 1024 });
-    expect(r).toMatchObject({ ok: true, value: { exported: 1, destination: "download" } });
+    expect(r).toMatchObject({ ok: true, value: { exported: 1, total: 1, destination: "download", cancelled: false } });
     expect(rt.exports[0]).toMatchObject({ recipe: { exposure: 1 }, opts: { quality: 0.9, maxEdge: 1024 } });
     expect(rt.downloads[0]!.fileName).toBe("DSC_0001.jpg");
+    expect(rt.store.getState().develop.exportJob).toBeNull();
+  });
+
+  it("exports every selected photo, each with its own edit, in selection order", async () => {
+    const rt = await createTestRuntime();
+    await rt.dispatch("develop.adjust", { setting: "exposure", value: 1, photoIds: ["DSC_0002.jpg"] });
+    await rt.dispatch("library.selection.set", { ids: ["DSC_0003.jpg", "DSC_0001.jpg", "DSC_0002.jpg"] });
+    const r = await rt.dispatch<{ exported: number; files: Array<{ photoId: string }> }>("develop.export");
+    expect(r).toMatchObject({ ok: true, value: { exported: 3, total: 3 } });
+    expect(r.ok && r.value.files.map((f) => f.photoId)).toEqual(["DSC_0003.jpg", "DSC_0001.jpg", "DSC_0002.jpg"]);
+    expect(rt.exports.map((e) => (e.recipe as { exposure: number }).exposure)).toEqual([0, 0, 1]);
+    expect(rt.downloads.map((d) => d.fileName)).toEqual(["DSC_0003.jpg", "DSC_0001.jpg", "DSC_0002.jpg"]);
+  });
+
+  it("a bulk export shows progress, runs alone, and can be cancelled between photos", async () => {
+    const rt = await createTestRuntime();
+    await rt.dispatch("library.selection.set", { ids: ["DSC_0001.jpg", "DSC_0002.jpg", "DSC_0003.jpg"] });
+    expect(await rt.dispatch("develop.export.cancel")).toMatchObject({ ok: false, error: "unavailable" }); // nothing running
+    // Hold every render until the test lets go.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const render = rt.services.exporter.renderJpeg;
+    rt.services.exporter.renderJpeg = async (...args) => {
+      await gate;
+      return render(...args);
+    };
+    const run = rt.dispatch<{ exported: number; total: number; cancelled: boolean }>("develop.export");
+    await flush();
+    expect(rt.store.getState().develop.exportJob).toMatchObject({ done: 0, total: 3, failed: 0, cancelRequested: false });
+    expect(await rt.dispatch("develop.export")).toMatchObject({ ok: false, error: "unavailable" }); // one at a time
+    expect(await rt.dispatch("develop.export.cancel")).toMatchObject({ ok: true });
+    expect(rt.store.getState().develop.exportJob).toMatchObject({ cancelRequested: true });
+    release();
+    expect(await run).toMatchObject({ ok: true, value: { exported: 1, total: 3, cancelled: true } });
+    expect(rt.downloads).toHaveLength(1); // the photo being written finished; the rest were skipped
+    expect(rt.store.getState().develop.exportJob).toBeNull();
+  });
+
+  it("export keeps going when one photo fails, and clears its progress on the way out", async () => {
+    const rt = await createTestRuntime();
+    await rt.dispatch("library.selection.set", { ids: ["DSC_0001.jpg", "DSC_0002.jpg"] });
+    const render = rt.services.exporter.renderJpeg;
+    rt.services.exporter.renderJpeg = async (image, recipe, opts) => {
+      if (rt.exports.length === 0) {
+        rt.exports.push({ recipe, opts });
+        throw new Error("GPU lost");
+      }
+      return render(image, recipe, opts);
+    };
+    const r = await rt.dispatch("develop.export");
+    expect(r).toMatchObject({ ok: true, value: { exported: 1, failed: [{ path: "DSC_0001.jpg", error: "GPU lost" }] } });
+    expect(rt.store.getState().develop.exportJob).toBeNull();
   });
 
   it("settings.get reports the active photo", async () => {
